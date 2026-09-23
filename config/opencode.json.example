@@ -3,20 +3,18 @@
   "provider": {
     "mimo": {
       "name": "Xiaomi MiMo (Phone Proxy)",
-      "npm": "@ai-sdk/openai-compatible",
+      "npm": "@ai-sdk/openai",
       "options": {
         "baseURL": "http://<PHONE_IP_OR_DOCKER_HOST>:8080/v1",
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
-        "mimo-v2.5": {
-          "name": "MiMo 2.5 (Phone Proxy)"
-        },
         "hana/mimo-v2.5": {
-          "name": "MiMo 2.5 (Phone Proxy - Legacy)"
+          "id": "hana/mimo-v2.5",
+          "name": "MiMo 2.5 (Phone Proxy)"
         }
       }
     }
   },
-  "model": "mimo/mimo-v2.5"
+  "model": "mimo/hana/mimo-v2.5"
 }

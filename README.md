@@ -199,23 +199,24 @@ Copy [`config/opencode.json.example`](file:///d:/proxy-test/config/opencode.json
   "provider": {
     "mimo": {
       "name": "Xiaomi MiMo (Phone Proxy)",
-      "npm": "@ai-sdk/openai-compatible",
+      "npm": "@ai-sdk/openai",
       "options": {
-        "baseURL": "http://<PHONE_IP>:8080/v1",
+        "baseURL": "http://192.168.22.61:8080/v1",
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
-        "mimo-v2.5": {
+        "hana/mimo-v2.5": {
+          "id": "hana/mimo-v2.5",
           "name": "MiMo 2.5 (Phone Proxy)"
         }
       }
     }
   },
-  "model": "mimo/mimo-v2.5"
+  "model": "mimo/hana/mimo-v2.5"
 }
 ```
 
-In OpenCode TUI, type `/model` and select `mimo/mimo-v2.5`. All chat completions will route through the proxy phone.
+In OpenCode TUI, type `/model` and select `mimo/hana/mimo-v2.5`. All chat completions will route through the proxy phone.
 
 ---
 
