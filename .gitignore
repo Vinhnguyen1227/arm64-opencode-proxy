@@ -1,29 +1,16 @@
-# Security: NEVER commit real API keys or environment secrets
 .env
 .env.*
 !.env.example
-
-# Temporary archives & build artifacts
 *.zip
 *.tar.gz
 *.tar
 *.log
 nohup.out
-
-# Legacy explored codebase
-cop-gpt-service/
-
-# AI memory bank (keep local only)
 memory-bank/
-
-# Local nested staging directory
 mimo-nginx-proxy/
-
-# OS & Editor files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-
-# Node modules
+opencode.json
 node_modules/

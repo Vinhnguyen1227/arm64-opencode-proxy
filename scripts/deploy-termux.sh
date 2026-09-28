@@ -70,14 +70,22 @@ http {
         "Bearer ${USER_B_KEY}" 1;
     }
 
-    # Enhanced log format capturing downstream client headers and upstream status
-    log_format proxy_debug '$remote_addr - [$time_local] "$request" $status '
-                           'downstream_ua:"$http_user_agent" '
-                           'downstream_auth:"$http_authorization" '
-                           'upstream_host:"${UPSTREAM_HOST}" '
-                           'upstream_addr:"$upstream_addr" '
-                           'upstream_status:"$upstream_status" '
-                           'upstream_time:"$upstream_response_time"';
+    # Map Content-Type: fallback to application/json if empty or missing
+    map $content_type $outbound_content_type {
+        default $content_type;
+        ""      "application/json";
+    }
+
+    # Dual-stream log format: INBOUND (client) + OUTBOUND (upstream & response)
+    log_format proxy_debug '[$time_local] id=$request_id | '
+                           '[INBOUND] client=$remote_addr (cf_ip=$http_cf_connecting_ip) '
+                           'method=$request_method uri="$request_uri" '
+                           'auth="$http_authorization" ua="$http_user_agent" '
+                           'content_type="$content_type" len=$content_length '
+                           'body="$request_body" | '
+                           '[OUTBOUND] upstream=$upstream_addr status=$upstream_status '
+                           'connect_time=${upstream_connect_time}s ttfb=${upstream_header_time}s stream_time=${upstream_response_time}s '
+                           'client_status=$status bytes_sent=$body_bytes_sent total_time=${request_time}s';
 
     access_log /data/data/com.termux/files/usr/var/log/nginx/access.log proxy_debug;
     error_log  /data/data/com.termux/files/usr/var/log/nginx/error.log warn;
@@ -86,6 +94,7 @@ http {
         listen ${PORT};
         server_name _;
         default_type application/json;
+        client_body_buffer_size 1M;
         client_max_body_size 50M;
 
         location = /healthz {
@@ -111,11 +120,14 @@ http {
             proxy_ssl_name ${UPSTREAM_HOST};
             proxy_ssl_protocols TLSv1.2 TLSv1.3;
 
+            proxy_pass_request_body on;
             proxy_set_header Host ${UPSTREAM_HOST};
             proxy_set_header Authorization "Bearer ${MIMO_API_KEY}";
             proxy_set_header User-Agent "opencode/1.18.21 ai-sdk/...";
-            proxy_set_header Content-Type $http_content_type;
+            proxy_set_header Content-Type $outbound_content_type;
             proxy_set_header Accept $http_accept;
+            proxy_set_header X-Request-ID $request_id;
+            add_header X-Request-ID $request_id always;
 
             proxy_set_header X-Forwarded-For "";
             proxy_set_header X-Real-IP "";

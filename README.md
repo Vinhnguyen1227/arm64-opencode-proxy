@@ -12,7 +12,7 @@ The proxy strips client network fingerprints, isolates tenants with virtual keys
 ┌─────────────────────────┐
 │ User A: OpenCode / IDE  │ (Plaintext HTTP + sk-userA-key)
 └────────────┬────────────┘
-             │                                  ARM64 Phone / Termux (192.168.22.61:8080)
+             │                                  ARM64 Phone / Termux (192.168.22.86:8080)
              ├──────────────────────────────► ┌──────────────────────────────────────────┐
              │                                │ 1. Ingress: Listen on 0.0.0.0:8080       │
 ┌────────────┴────────────┐                   │ 2. Auth Gate: Validate virtual key       │
@@ -46,7 +46,8 @@ arm64-openai-proxy/
 │   └── opencode.json.example # OpenCode client configuration template
 │
 ├── scripts/                  # Deployment & operational scripts
-│   └── deploy-termux.sh      # 1-click Termux ARM64 installer (with wake-lock)
+│   ├── deploy-termux.sh      # 1-click Termux ARM64 installer (with wake-lock)
+│   └── trace-live.sh         # Live colored dual-stream HTTP trace viewer
 │
 └── tests/                    # Testing harnesses & mocks
     ├── mock-upstream.js      # Mock API server with header inspection
@@ -62,7 +63,7 @@ arm64-openai-proxy/
 The proxy operates as a **TLS Termination and Bridging Gateway**:
 
 ### Downstream: Plaintext HTTP (Local Wi-Fi)
-* **Path**: Developer PC (OpenCode / VS Code) ➔ Phone Proxy (`http://192.168.22.61:8080`).
+* **Path**: Developer PC (OpenCode / VS Code) ➔ Phone Proxy (`http://192.168.22.86:8080`).
 * **Protocol**: Unencrypted HTTP/1.1 over local trusted Wi-Fi.
 * **Why**:
   * Eliminates the need to generate, distribute, and trust custom self-signed SSL certificates on every developer machine.
@@ -149,9 +150,9 @@ Ran [`verify-traffic.ps1`](file:///d:/proxy-test/tests/verify-traffic.ps1):
 ```
 
 ### B. Physical Samsung Android ARM64 Phone Live Test
-Request dispatched from PC across local Wi-Fi to phone (`192.168.22.61:8080`):
+Request dispatched from PC across local Wi-Fi to phone (`192.168.22.86:8080`):
 ```powershell
-curl.exe -i -H "Authorization: Bearer sk-userA-vkey-001" http://192.168.22.61:8080/v1/models
+curl.exe -i -H "Authorization: Bearer sk-userA-vkey-001" http://192.168.22.86:8080/v1/models
 ```
 **Upstream Response (HTTP 200 OK from Hana Gateway via Phone):**
 ```http
@@ -201,7 +202,7 @@ Copy [`config/opencode.json.example`](file:///d:/proxy-test/config/opencode.json
       "name": "Xiaomi MiMo (Phone Proxy)",
       "npm": "@ai-sdk/openai",
       "options": {
-        "baseURL": "http://192.168.22.61:8080/v1",
+        "baseURL": "http://192.168.22.86:8080/v1",
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
@@ -220,22 +221,30 @@ In OpenCode TUI, type `/model` and select `mimo/hana/mimo-v2.5`. All chat comple
 
 ---
 
-## 9. Real-Time Telemetry & Log Tracing
+## 9. Real-Time Telemetry & Dual-Stream Log Tracing
 
-In Termux on your phone, watch incoming and outgoing traffic live:
+Watch incoming client requests and outgoing upstream exchanges live in Termux on your phone:
 
+### Option A: Standard Direct Tail
 ```bash
 tail -f $PREFIX/var/log/nginx/access.log
 ```
 
-**Log Format**:
-```text
-192.168.22.63 - [23/Sep/2026:08:48:07 +0000] "POST /v1/chat/completions HTTP/1.1" 200
-  downstream_ua: "opencode/1.18.21"
-  downstream_auth: "Bearer sk-userA-vkey-001"
-  upstream_host: "api.vilao.ai"
-  upstream_addr: "103.252.123.86:443"
-  upstream_status: "200"
-  upstream_time: "1.420"
+### Option B: Formatted Live Monitor (Colored)
+```bash
+chmod +x scripts/trace-live.sh
+./scripts/trace-live.sh
 ```
+
+**Dual-Stream Log Output Format**:
+```text
+[28/Sep/2026:10:09:42 +0000] id=a8e2f1d93b4c5021e789f012345678ab |
+[INBOUND] client=127.0.0.1 (cf_ip=113.161.42.15) method=POST uri="/v1/chat/completions" auth="Bearer sk-userB-vkey-002" ua="opencode/1.18.21" content_type="application/json" len=1420 body="{\"model\":\"mimo-v2.5\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}" |
+[OUTBOUND] upstream=103.252.123.86:443 status=200 connect_time=0.042s ttfb=0.812s stream_time=2.450s client_status=200 bytes_sent=1950 total_time=2.495s
+```
+
+* Each transaction displays:
+  * **`id`**: Unique 128-bit `$request_id` (also injected as `X-Request-ID` in HTTP response headers).
+  * **`[INBOUND]`**: Downstream client IP, Cloudflare connecting IP (`cf_ip`), method, path, virtual key, incoming user-agent, content-type, payload size, and **exact raw request body** (`$request_body`).
+  * **`[OUTBOUND]`**: Resolved upstream IP:port, upstream HTTP status, TCP connect latency, Time To First Token (`ttfb`), streaming duration, client response code, and total turnaround time.
 
