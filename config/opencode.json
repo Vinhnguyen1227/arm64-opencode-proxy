@@ -9,12 +9,17 @@
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
-        "hana/mimo-v2.5": {
-          "id": "hana/mimo-v2.5",
+        "gpt-5.5": {
+          "name": "GPT-5.5 (Phone Proxy)"
+        },
+        "mimo-v2.5": {
           "name": "MiMo 2.5 (Phone Proxy)"
+        },
+        "hana/mimo-v2.5": {
+          "name": "MiMo 2.5 (Phone Proxy - Legacy)"
         }
       }
     }
   },
-  "model": "mimo/hana/mimo-v2.5"
+  "model": "mimo/gpt-5.5"
 }
