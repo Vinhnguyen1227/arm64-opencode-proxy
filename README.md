@@ -221,9 +221,9 @@ In OpenCode TUI, type `/model` and select `mimo/hana/mimo-v2.5`. All chat comple
 
 ---
 
-## 9. Real-Time Telemetry & Dual-Stream Log Tracing
+## 9. Real-Time Telemetry & Human-Readable Log Tracing
 
-Watch incoming client requests and outgoing upstream exchanges live in Termux on your phone:
+Watch incoming client requests and outgoing upstream metrics live in Termux on your phone:
 
 ### Option A: Standard Direct Tail
 ```bash
@@ -236,15 +236,16 @@ chmod +x scripts/trace-live.sh
 ./scripts/trace-live.sh
 ```
 
-**Dual-Stream Log Output Format**:
+**Clean Single-Line Log Output Format**:
 ```text
-[28/Sep/2026:10:09:42 +0000] id=a8e2f1d93b4c5021e789f012345678ab |
-[INBOUND] client=127.0.0.1 (cf_ip=113.161.42.15) method=POST uri="/v1/chat/completions" auth="Bearer sk-userB-vkey-002" ua="opencode/1.18.21" content_type="application/json" len=1420 body="{\"model\":\"mimo-v2.5\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}" |
-[OUTBOUND] upstream=103.252.123.86:443 status=200 connect_time=0.042s ttfb=0.812s stream_time=2.450s client_status=200 bytes_sent=1950 total_time=2.495s
+[28/Sep/2026:10:58:05 +0700] id=5ed4c71e | POST /v1/responses -> 503 | Client: 192.168.22.76 (cf: -, auth: Bearer sk-userA-vkey-001) | Upstream: 103.252.123.86:443 (status: 503, latency: 0.166s, ttfb: 0.165s) | Size: 28987B in / 176B out
 ```
 
 * Each transaction displays:
-  * **`id`**: Unique 128-bit `$request_id` (also injected as `X-Request-ID` in HTTP response headers).
-  * **`[INBOUND]`**: Downstream client IP, Cloudflare connecting IP (`cf_ip`), method, path, virtual key, incoming user-agent, content-type, payload size, and **exact raw request body** (`$request_body`).
-  * **`[OUTBOUND]`**: Resolved upstream IP:port, upstream HTTP status, TCP connect latency, Time To First Token (`ttfb`), streaming duration, client response code, and total turnaround time.
+  * **`Timestamp & id`**: Local time and transaction `$request_id` (also injected as `X-Request-ID` in HTTP response headers).
+  * **`Method & URI`**: `$request_method $request_uri` -> HTTP status code (`$status`).
+  * **`Client Info`**: Client IP (`$remote_addr`), Cloudflare IP if tunneled (`$http_cf_connecting_ip`), and virtual authorization key.
+  * **`Upstream Metrics`**: Resolved upstream IP:port, upstream HTTP status, response latency, and Time to First Token (`ttfb`).
+  * **`Payload Sizes`**: Inbound request size (`${content_length}B in`) and outbound response size (`${body_bytes_sent}B out`).
+  * *Note*: Raw JSON request bodies are explicitly excluded from the log stream to prevent terminal clutter from large coding-agent prompts.
 

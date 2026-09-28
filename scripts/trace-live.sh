@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ==============================================================================
-# Live HTTP Request / Response Trace Viewer for Termux Nginx Proxy
+# Live HTTP Request & Upstream Telemetry Monitor for Termux Nginx Proxy
 # ==============================================================================
 
 LOG_FILE="${PREFIX:-/data/data/com.termux/files/usr}/var/log/nginx/access.log"
@@ -13,7 +13,7 @@ if [ ! -f "$LOG_FILE" ]; then
 fi
 
 echo "=============================================================================="
-echo " Starting Live Dual-Stream Trace Monitor on $LOG_FILE"
+echo " Starting Live HTTP Telemetry Monitor on $LOG_FILE"
 echo " (Press Ctrl+C to stop)"
 echo "=============================================================================="
 echo ""
@@ -21,30 +21,37 @@ echo ""
 # Format and colorize log stream live
 tail -n 20 -F "$LOG_FILE" | awk '
 BEGIN {
-    CYAN   = "\033[1;36m"
-    GREEN  = "\033[1;32m"
-    YELLOW = "\033[1;33m"
-    RED    = "\033[1;31m"
-    BOLD   = "\033[1m"
-    RESET  = "\033[0m"
+    CYAN    = "\033[1;36m"
+    GREEN   = "\033[1;32m"
+    YELLOW  = "\033[1;33m"
+    RED     = "\033[1;31m"
+    MAGENTA = "\033[1;35m"
+    BLUE    = "\033[1;34m"
+    BOLD    = "\033[1m"
+    DIM     = "\033[2m"
+    RESET   = "\033[0m"
 }
 {
-    print ""
-    print BOLD "------------------------------------------------------------------------------" RESET
-    
-    # Highlight Inbound block
-    gsub(/\[INBOUND\]/, CYAN "[INBOUND CLIENT]" RESET)
-    
-    # Highlight Outbound block
-    gsub(/\[OUTBOUND\]/, GREEN "[OUTBOUND UPSTREAM]" RESET)
-    
-    # Highlight status codes
-    gsub(/status=200/, GREEN "status=200" RESET)
-    gsub(/status=4[0-9][0-9]/, RED "&" RESET)
-    gsub(/status=5[0-9][0-9]/, RED "&" RESET)
-    
-    # Print formatted line
-    print $0
+    line = $0
+
+    # Highlight HTTP Methods
+    gsub(/ (GET|POST|OPTIONS|DELETE|PUT) /, CYAN " & " RESET, line)
+
+    # Highlight Status Codes
+    gsub(/-> 200 /, GREEN "-> 200 " RESET, line)
+    gsub(/-> (4[0-9][0-9]|5[0-9][0-9]) /, RED "-> & " RESET, line)
+    gsub(/status: 200/, GREEN "status: 200" RESET, line)
+    gsub(/status: (4[0-9][0-9]|5[0-9][0-9])/, RED "&" RESET, line)
+
+    # Highlight Upstream and Latency
+    gsub(/Upstream: [^|]+/, YELLOW "&" RESET, line)
+    gsub(/latency: [0-9.]+s/, MAGENTA "&" RESET, line)
+    gsub(/ttfb: [0-9.]+s/, MAGENTA "&" RESET, line)
+
+    # Highlight Size
+    gsub(/Size: [^|]+/, BLUE "&" RESET, line)
+
+    print line
     fflush()
 }
 '

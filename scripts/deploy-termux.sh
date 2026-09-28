@@ -76,18 +76,14 @@ http {
         ""      "application/json";
     }
 
-    # Dual-stream log format: INBOUND (client) + OUTBOUND (upstream & response)
-    log_format proxy_debug '[$time_local] id=$request_id | '
-                           '[INBOUND] client=$remote_addr (cf_ip=$http_cf_connecting_ip) '
-                           'method=$request_method uri="$request_uri" '
-                           'auth="$http_authorization" ua="$http_user_agent" '
-                           'content_type="$content_type" len=$content_length '
-                           'body="$request_body" | '
-                           '[OUTBOUND] upstream=$upstream_addr status=$upstream_status '
-                           'connect_time=${upstream_connect_time}s ttfb=${upstream_header_time}s stream_time=${upstream_response_time}s '
-                           'client_status=$status bytes_sent=$body_bytes_sent total_time=${request_time}s';
+    # Human-readable log format: clean single-line summary without raw body dump
+    log_format proxy_readable '[$time_local] id=$request_id | '
+                              '$request_method $request_uri -> $status | '
+                              'Client: $remote_addr (cf: $http_cf_connecting_ip, auth: $http_authorization) | '
+                              'Upstream: $upstream_addr (status: $upstream_status, latency: ${upstream_response_time}s, ttfb: ${upstream_header_time}s) | '
+                              'Size: ${content_length}B in / ${body_bytes_sent}B out';
 
-    access_log /data/data/com.termux/files/usr/var/log/nginx/access.log proxy_debug;
+    access_log /data/data/com.termux/files/usr/var/log/nginx/access.log proxy_readable;
     error_log  /data/data/com.termux/files/usr/var/log/nginx/error.log warn;
 
     server {
