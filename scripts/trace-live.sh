@@ -12,11 +12,8 @@ if [ ! -f "$LOG_FILE" ]; then
     touch "$LOG_FILE"
 fi
 
-echo "=============================================================================="
 echo " Starting Live HTTP Telemetry Monitor on $LOG_FILE"
-echo " (Press Ctrl+C to stop)"
-echo "=============================================================================="
-echo ""
+
 
 # Format and colorize log stream live
 tail -n 20 -F "$LOG_FILE" | awk '

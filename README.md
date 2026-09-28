@@ -249,3 +249,102 @@ chmod +x scripts/trace-live.sh
   * **`Payload Sizes`**: Inbound request size (`${content_length}B in`) and outbound response size (`${body_bytes_sent}B out`).
   * *Note*: Raw JSON request bodies are explicitly excluded from the log stream to prevent terminal clutter from large coding-agent prompts.
 
+---
+
+## 10. Cross-Platform Verification & Debian / Linux Client Guide
+
+Use the portable POSIX test suite (`tests/test-proxy.sh`) to verify network connectivity, TLS handshake, auth gates, streaming, and buffer capacity from any **Debian**, **Ubuntu**, **macOS**, or **Linux** machine.
+
+### A. Run Automated POSIX Test Suite on Debian
+
+```bash
+# Clone or copy repository on Debian
+git clone https://github.com/Vinhnguyen1227/arm64-openai-proxy.git
+cd arm64-openai-proxy
+
+# Execute test suite against your Cloudflare Tunnel URL or LAN IP
+chmod +x tests/test-proxy.sh
+./tests/test-proxy.sh --url https://<YOUR_TUNNEL_URL>.trycloudflare.com --key sk-userB-vkey-002 --model gpt-6-sol
+```
+
+**Expected Test Output (7/7 Pass):**
+```text
+======================================================================
+ AI REVERSE PROXY: CROSS-PLATFORM TEST SUITE (POSIX BASH)
+ Target URL : https://<YOUR_TUNNEL_URL>.trycloudflare.com
+ Virtual Key: sk-userB-vkey-0...
+ Model Target: gpt-6-sol
+ OS Detected: Linux x86_64
+======================================================================
+
+--- [SUITE 1] Infrastructure & Connectivity ---
+ [PASS] Health Check Endpoint (/healthz)
+        HTTP 200 | {"status":"ok","engine":"nginx","port":"8080"}
+
+--- [SUITE 2] Security & Virtual Key Gate ---
+ [PASS] Reject Missing Token (HTTP 401)
+        Unauthenticated request correctly blocked
+ [PASS] Reject Invalid Token (HTTP 401)
+        Invalid virtual key correctly blocked
+
+--- [SUITE 3] Upstream Discovery & Authentication ---
+ [PASS] Model Discovery (/v1/models)
+        HTTP 200 | Found target model: gpt-6-sol
+
+--- [SUITE 4] OpenCode Chat & Completion Protocol ---
+ [PASS] Standard Chat Completion (/v1/chat/completions)
+        HTTP 200 | Assistant replied with Pong
+
+--- [SUITE 5] Real-Time Streaming (SSE / Unbuffered) ---
+ [PASS] Server-Sent Events Streaming (stream: true)
+        HTTP 200 | Captured 10 SSE data chunks
+
+--- [SUITE 6] Large Payload & Buffer Validation ---
+ [PASS] Large Payload Pass-Through (32035 bytes)
+        HTTP 200 | Large buffer accepted without 413 or truncation
+
+======================================================================
+ TEST SUMMARY: 7 Passed, 0 Failed (Total: 7)
+======================================================================
+SUCCESS: The proxy is fully verified and ready for OpenCode on all operating systems!
+```
+
+---
+
+### B. Configuring OpenCode on Debian
+
+On the Debian machine, create `~/.config/opencode/config.json` (or `opencode.json` in the workspace root):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "proxy-gpt6": {
+      "name": "Proxy GPT-6",
+      "npm": "@ai-sdk/openai",
+      "options": {
+        "baseURL": "https://<YOUR_TUNNEL_URL>.trycloudflare.com/v1",
+        "apiKey": "sk-userB-vkey-002"
+      },
+      "models": {
+        "gpt-6-sol": {
+          "name": "GPT-6 Sol"
+        }
+      }
+    }
+  },
+  "model": "proxy-gpt6/gpt-6-sol"
+}
+```
+
+### C. Quick Debian One-Liner Test via `curl`
+
+Verify without OpenCode using standard Debian curl:
+```bash
+curl -s -X POST https://<YOUR_TUNNEL_URL>.trycloudflare.com/v1/chat/completions \
+  -H "Authorization: Bearer sk-userB-vkey-002" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-6-sol","messages":[{"role":"user","content":"ping"}]}'
+# Expected response: {"choices":[{"message":{"content":"pong",...}}],...}
+```
+

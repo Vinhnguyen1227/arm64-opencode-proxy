@@ -6,16 +6,11 @@
 
 set -e
 
-echo "[*] Step 1: Updating packages and installing prerequisites..."
 # Use apt directly to bypass pkg/curl bootstrap library mismatch
 apt update -y || pkg update -y
 apt install -y nginx gettext net-tools || pkg install -y nginx gettext net-tools
-
-echo "[*] Step 2: Enabling Android Wake-Lock..."
 termux-wake-lock
-echo "[+] Wake-lock acquired. (Ensure Termux battery is set to Unrestricted in Android Settings)"
 
-echo "[*] Step 3: Loading configuration from .env..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/../.env" ]; then
     export $(grep -v '^#' "$SCRIPT_DIR/../.env" | xargs)
@@ -36,10 +31,9 @@ export USER_A_KEY="${USER_A_KEY:-sk-userA-vkey-001}"
 export USER_B_KEY="${USER_B_KEY:-sk-userB-vkey-002}"
 export MIMO_API_KEY="${MIMO_API_KEY:-tp-placeholder-key}"
 
-echo "[*] Upstream Target: ${UPSTREAM_SCHEME}://${UPSTREAM_HOST}:${UPSTREAM_PORT}"
-echo "[*] Listening Port : $PORT"
+echo "    Upstream Target: ${UPSTREAM_SCHEME}://${UPSTREAM_HOST}:${UPSTREAM_PORT}"
+echo "    Listening Port : $PORT"
 
-echo "[*] Step 4: Generating Nginx configuration for Termux..."
 NGINX_CONF_DIR="$PREFIX/etc/nginx"
 mkdir -p "$NGINX_CONF_DIR"
 mkdir -p "$PREFIX/var/log/nginx"
@@ -152,10 +146,8 @@ EOF
 envsubst '$PORT $UPSTREAM_HOST $UPSTREAM_PORT $UPSTREAM_SCHEME $MIMO_API_KEY $USER_A_KEY $USER_B_KEY' < "$NGINX_CONF_DIR/nginx.conf.raw" > "$NGINX_CONF_DIR/nginx.conf"
 rm -f "$NGINX_CONF_DIR/nginx.conf.raw"
 
-echo "[*] Step 5: Testing Nginx syntax..."
 nginx -t
 
-echo "[*] Step 6: Launching Nginx server..."
 nginx -s reload 2>/dev/null || nginx
 
 # Discover Wi-Fi IP address
@@ -164,12 +156,11 @@ if [ -z "$WLAN_IP" ]; then
     WLAN_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "PHONE_IP")
 fi
 
-echo ""
-echo "======================================================================"
-echo "[+] Nginx AI Reverse Proxy successfully running on ARM64!"
+
+echo "    Nginx AI Reverse Proxy successfully running on ARM64!"
 echo "    Local Endpoint : http://localhost:$PORT/v1"
 echo "    Network BaseURL: http://$WLAN_IP:$PORT/v1"
 echo ""
 echo "    User A Key: $USER_A_KEY"
 echo "    User B Key: $USER_B_KEY"
-echo "======================================================================"
+
