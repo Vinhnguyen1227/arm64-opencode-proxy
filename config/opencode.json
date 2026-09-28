@@ -9,17 +9,20 @@
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
+        "gpt-6-sol": {
+          "name": "GPT-6 Sol (Phone Proxy)"
+        },
+        "vgpt/gpt-6-sol": {
+          "name": "GPT-6 Sol (vgpt/gpt-6-sol)"
+        },
         "gpt-5.5": {
           "name": "GPT-5.5 (Phone Proxy)"
         },
         "mimo-v2.5": {
           "name": "MiMo 2.5 (Phone Proxy)"
-        },
-        "hana/mimo-v2.5": {
-          "name": "MiMo 2.5 (Phone Proxy - Legacy)"
         }
       }
     }
   },
-  "model": "mimo/gpt-5.5"
+  "model": "mimo/gpt-6-sol"
 }
