@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# ==============================================================================
 # Cross-Platform POSIX Test Suite for ARM64 AI Reverse Proxy
 # Compatible with: Debian, Ubuntu, Fedora, macOS, Termux, and WSL
 # Requires: bash, curl, grep, awk (standard POSIX tools)
-# ==============================================================================
 
 set -u
 

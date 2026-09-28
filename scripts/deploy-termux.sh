@@ -1,8 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# ==============================================================================
 # ARM64 AI Reverse Proxy - Termux Deployment Script
 # Target: Android ARM64 (Samsung / Termux)
-# ==============================================================================
 
 set -e
 

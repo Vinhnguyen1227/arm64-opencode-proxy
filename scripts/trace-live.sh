@@ -1,7 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# ==============================================================================
 # Live HTTP Request & Upstream Telemetry Monitor for Termux Nginx Proxy
-# ==============================================================================
 
 LOG_FILE="${PREFIX:-/data/data/com.termux/files/usr}/var/log/nginx/access.log"
 

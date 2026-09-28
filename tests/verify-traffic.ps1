@@ -1,6 +1,4 @@
-# ==============================================================================
 # Comprehensive Traffic & Header Inspection Verification Script
-# ==============================================================================
 
 param(
     [string]$ProxyUrl = "http://localhost:8080",
