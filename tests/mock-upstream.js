@@ -37,14 +37,12 @@ const server = http.createServer((req, res) => {
         body: parsedBody
       };
 
-      console.log('\n------------------------------------------------------------');
       console.log(`[Mock Upstream] Intercepted ${req.method} ${req.url}`);
       console.log(`  > Host           : ${req.headers['host']}`);
       console.log(`  > User-Agent     : ${req.headers['user-agent']}`);
       console.log(`  > Authorization  : ${req.headers['authorization']}`);
       console.log(`  > X-Forwarded-For: ${req.headers['x-forwarded-for'] || '<DROPPED / ABSENT>'}`);
       console.log(`  > X-Real-IP      : ${req.headers['x-real-ip'] || '<DROPPED / ABSENT>'}`);
-      console.log('------------------------------------------------------------');
     }
 
     // Route: Inspector endpoint for automated test assertion

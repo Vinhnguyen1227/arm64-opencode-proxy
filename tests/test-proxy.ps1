@@ -20,9 +20,7 @@ function Report-Test {
     }
 }
 
-Write-Host "======================================================================"
 Write-Host "Starting Nginx Proxy Test Suite against $BaseUrl"
-Write-Host "======================================================================"
 
 # Test 1: Health Check
 try {
@@ -71,7 +69,6 @@ try {
 try {
     $headers = @{ "Authorization" = "Bearer $UserAKey" }
     $res = Invoke-WebRequest -Uri "$BaseUrl/v1/models" -Headers $headers -Method GET -TimeoutSec 10 -UseBasicParsing
-    # If upstream key is valid -> 200. If upstream key is placeholder -> upstream returns 401/403 with upstream body (not our proxy's 401)
     Report-Test "User A Virtual Key Accepted" ($res.StatusCode -eq 200) "Upstream returned 200"
 } catch {
     $statusCode = $_.Exception.Response.StatusCode.value__
@@ -81,7 +78,6 @@ try {
         $reader = New-Object System.IO.StreamReader($stream)
         $body = $reader.ReadToEnd()
     }
-    # Note: If proxy passes to Xiaomi MiMo and MiMo returns an upstream response (not proxy's internal "Invalid Virtual API Key"), it passed the gate!
     $isProxyGate = $body -match "Invalid Virtual API Key"
     if (-not $isProxyGate) {
         Report-Test "User A Virtual Key Passed Proxy Gate" $true "Passed proxy auth and reached upstream (Upstream HTTP $statusCode)"
@@ -111,13 +107,10 @@ try {
     }
 }
 
-Write-Host "======================================================================"
 Write-Host "Test Results: $passed Passed, $failed Failed"
-Write-Host "======================================================================"
 
 if ($failed -gt 0) {
     exit 1
 } else {
     exit 0
 }
-
