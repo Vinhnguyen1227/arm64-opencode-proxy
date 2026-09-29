@@ -55,7 +55,7 @@ OpenCode v2 differs from standard REST tools:
 ## 3. Repository Structure
 
 ```text
-arm64-openai-proxy/
+arm64-opencode-proxy/
 ├── .env.example              # Environment variables template
 ├── .gitignore                # Git exclusions
 ├── docker-compose.yml        # Docker runner (mounts single-source template)
@@ -104,8 +104,8 @@ MODEL_NAME=gpt-6-sol
 2. In Termux, run:
    ```bash
    pkg install -y git
-   git clone https://github.com/Vinhnguyen1227/arm64-openai-proxy.git
-   cd arm64-openai-proxy
+   git clone https://github.com/Vinhnguyen1227/arm64-opencode-proxy.git
+   cd arm64-opencode-proxy
    cp .env.example .env
    # Edit .env with your MIMO_API_KEY
    bash scripts/deploy-termux.sh
