@@ -1,5 +1,5 @@
 param (
-    [string]$TargetUrl = "http://192.168.1.138:8080",
+    [string]$TargetUrl = "http://192.168.22.87:8080",
     [string]$ApiKey = "sk-userA-vkey-001",
     [string]$Model = "gpt-6-sol"
 )

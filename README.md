@@ -110,7 +110,7 @@ MODEL_NAME=gpt-6-sol
    # Edit .env with your MIMO_API_KEY
    bash scripts/deploy-termux.sh
    ```
-3. The script configures Nginx, enables `termux-wake-lock`, starts the service, and outputs the local Wi-Fi IP (e.g. `http://192.168.1.138:8080`).
+3. The script configures Nginx, enables `termux-wake-lock`, starts the service, and outputs the local Wi-Fi IP (e.g. `http://192.168.22.87:8080`).
 
 ---
 
@@ -143,7 +143,7 @@ Create or update `opencode.json` (or `~/.config/opencode/config.json`):
       "name": "OpenCode ARM64 Reverse Proxy",
       "npm": "@ai-sdk/openai",
       "options": {
-        "baseURL": "http://192.168.1.138:8080",
+        "baseURL": "http://192.168.22.87:8080",
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
@@ -160,7 +160,7 @@ Create or update `opencode.json` (or `~/.config/opencode/config.json`):
 }
 ```
 
-> **Note**: Both `"baseURL": "http://192.168.1.138:8080"` and `"baseURL": "http://192.168.1.138:8080/v1"` are supported seamlessly.
+> **Note**: Both `"baseURL": "http://192.168.22.87:8080"` and `"baseURL": "http://192.168.22.87:8080/v1"` are supported seamlessly.
 
 ---
 
@@ -188,12 +188,12 @@ bash scripts/trace-live.sh
 
 ### On Windows Workstation (PowerShell)
 ```powershell
-.\tests\test-opencode.ps1 -TargetUrl "http://192.168.1.138:8080" -ApiKey "sk-userA-vkey-001" -Model "gpt-6-sol"
+.\tests\test-opencode.ps1 -TargetUrl "http://192.168.22.87:8080" -ApiKey "sk-userA-vkey-001" -Model "gpt-6-sol"
 ```
 
 ### On Linux / Debian / macOS / Termux (POSIX Bash)
 ```bash
-bash tests/test-opencode.sh "http://192.168.1.138:8080" "sk-userB-vkey-002" "gpt-6-sol"
+bash tests/test-opencode.sh "http://192.168.22.87:8080" "sk-userB-vkey-002" "gpt-6-sol"
 ```
 
 **Test Suite Coverage (7 Assertions)**:
@@ -216,11 +216,11 @@ If OpenCode on Debian reports connection errors:
    ```
 2. **Verify Connectivity**:
    ```bash
-   curl -I http://192.168.1.138:8080/healthz
+   curl -I http://192.168.22.87:8080/healthz
    ```
 3. **Verify Upstream via curl**:
    ```bash
-   curl -s -X POST http://192.168.1.138:8080/responses \
+   curl -s -X POST http://192.168.22.87:8080/responses \
      -H "Authorization: Bearer sk-userB-vkey-002" \
      -H "Content-Type: application/json" \
      -d '{"model":"gpt-6-sol","input":"ping"}'
