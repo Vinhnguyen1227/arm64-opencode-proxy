@@ -1,7 +1,7 @@
 param (
     [string]$TargetUrl = "http://192.168.22.87:8080",
     [string]$ApiKey = "sk-userA-vkey-001",
-    [string]$Model = "gpt-6-sol"
+    [string]$Model = "vgpt/gpt-6-sol"
 )
 
 $ErrorActionPreference = "Continue"

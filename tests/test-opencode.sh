@@ -3,7 +3,7 @@ set -e
 
 TARGET_URL="${1:-http://localhost:8080}"
 API_KEY="${2:-sk-userA-vkey-001}"
-MODEL="${3:-gpt-6-sol}"
+MODEL="${3:-vgpt/gpt-6-sol}"
 
 GREEN="\033[1;32m"
 RED="\033[1;31m"
