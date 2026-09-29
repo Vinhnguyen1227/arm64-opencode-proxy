@@ -43,7 +43,10 @@ envsubst '$PORT $UPSTREAM_HOST $UPSTREAM_PORT $UPSTREAM_SCHEME $MIMO_API_KEY $US
 
 nginx -t
 
-nginx -s reload 2>/dev/null || nginx
+pkill -9 -f nginx 2>/dev/null || true
+sleep 1
+nginx
+
 
 WLAN_IP=$(ip -4 addr show wlan0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || true)
 if [ -z "$WLAN_IP" ]; then
