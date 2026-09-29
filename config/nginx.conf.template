@@ -1,130 +1,105 @@
-# Increase hash bucket size for long Bearer authorization tokens
-map_hash_bucket_size 128;
-map_hash_max_size 2048;
+worker_processes auto;
 
-# Map virtual authorization keys to valid flag (1 = valid, 0 = invalid)
-map $http_authorization $auth_valid {
-    default 0;
-    "Bearer ${USER_A_KEY}" 1;
-    "Bearer ${USER_B_KEY}" 1;
+events {
+    worker_connections 1024;
 }
 
-# Map Content-Type: fallback to application/json if empty or missing
-map $content_type $outbound_content_type {
-    default $content_type;
-    ""      "application/json";
-}
+http {
+    include mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    keepalive_timeout 65;
 
-# Human-readable log format: clean single-line summary without raw body dump
-log_format proxy_readable '[$time_local] id=$request_id | '
-                          '$request_method $request_uri -> $status | '
-                          'Client: $remote_addr (cf: $http_cf_connecting_ip, auth: $http_authorization) | '
-                          'Upstream: $upstream_addr (status: $upstream_status, latency: ${upstream_response_time}s, ttfb: ${upstream_header_time}s) | '
-                          'Size: ${content_length}B in / ${body_bytes_sent}B out';
+    map_hash_bucket_size 128;
+    map_hash_max_size 2048;
 
-server {
-    listen ${PORT};
-    server_name _;
-
-    # Direct access logs to stdout with readable format
-    access_log /dev/stdout proxy_readable;
-
-    # Default response type for JSON errors and status
-    default_type application/json;
-
-    # Allow large payload buffers for multi-turn chat completions
-    client_body_buffer_size 1M;
-    client_max_body_size 50M;
-
-    # Health check endpoint
-    location = /healthz {
-        return 200 '{"status":"ok","engine":"nginx","port":"${PORT}"}\n';
+    map $http_authorization $auth_valid {
+        default 0;
+        "Bearer ${USER_A_KEY}" 1;
+        "Bearer ${USER_B_KEY}" 1;
     }
 
-    # Proxy all OpenAI / MiMo v1 endpoints (Production Upstream)
-    location /v1/ {
-        # CORS preflight handling for web-based clients
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' '*' always;
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept' always;
-            add_header 'Content-Type' 'text/plain; charset=utf-8';
-            add_header 'Content-Length' 0;
-            return 204;
-        }
-
-        # 1. Enforce Authentication Gate
-        if ($auth_valid = 0) {
-            return 401 '{"error":{"message":"Invalid Virtual API Key. Unauthorized proxy access.","type":"invalid_request_error","code":"invalid_api_key"}}\n';
-        }
-
-        # 2. Upstream Proxy Target (supports flexible scheme and port)
-        proxy_pass ${UPSTREAM_SCHEME}://${UPSTREAM_HOST}:${UPSTREAM_PORT};
-
-        # 3. SSL Configuration for SNI (active when scheme is https)
-        proxy_ssl_server_name on;
-        proxy_ssl_name ${UPSTREAM_HOST};
-        proxy_ssl_protocols TLSv1.2 TLSv1.3;
-
-        # 4. Canonical Outbound Headers
-        proxy_pass_request_body on;
-        proxy_set_header Host ${UPSTREAM_HOST};
-        proxy_set_header Authorization "Bearer ${MIMO_API_KEY}";
-        proxy_set_header User-Agent "opencode/1.18.21 ai-sdk/...";
-        proxy_set_header Content-Type $outbound_content_type;
-        proxy_set_header Accept $http_accept;
-        proxy_set_header X-Request-ID $request_id;
-        add_header X-Request-ID $request_id always;
-
-        # 5. Strip Tracking & Fingerprinting Headers
-        proxy_set_header X-Forwarded-For "";
-        proxy_set_header X-Real-IP "";
-        proxy_set_header X-Forwarded-Proto "";
-        proxy_set_header X-Forwarded-Host "";
-
-        # 6. Zero-Buffer Streaming (SSE chunked transfer)
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_buffering off;
-        proxy_cache off;
-        chunked_transfer_encoding on;
-
-        # 7. Extended timeouts for LLM reasoning and generation
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 600s;
-        proxy_read_timeout 600s;
+    map $content_type $outbound_content_type {
+        default $content_type;
+        ""      "application/json";
     }
 
-    # Dedicated mock test location (Unit testing & header assertion)
-    location /mock-v1/ {
-        if ($auth_valid = 0) {
-            return 401 '{"error":{"message":"Invalid Virtual API Key. Unauthorized proxy access.","type":"invalid_request_error","code":"invalid_api_key"}}\n';
-        }
-
-        proxy_pass http://host.docker.internal:9000/v1/;
-        proxy_pass_request_body on;
-        proxy_set_header Host host.docker.internal;
-        proxy_set_header Authorization "Bearer ${MIMO_API_KEY}";
-        proxy_set_header User-Agent "opencode/1.18.21 ai-sdk/...";
-        proxy_set_header Content-Type $outbound_content_type;
-        proxy_set_header Accept $http_accept;
-        proxy_set_header X-Request-ID $request_id;
-        add_header X-Request-ID $request_id always;
-
-        proxy_set_header X-Forwarded-For "";
-        proxy_set_header X-Real-IP "";
-        proxy_set_header X-Forwarded-Proto "";
-        proxy_set_header X-Forwarded-Host "";
-
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        proxy_buffering off;
-        proxy_cache off;
-        chunked_transfer_encoding on;
+    map $http_user_agent $outbound_user_agent {
+        default $http_user_agent;
+        ""      "opencode/1.18.21 ai-sdk/openai";
     }
 
-    # Root fallback
-    location / {
-        return 404 '{"error":{"message":"Not Found. Use /v1 endpoints.","type":"invalid_request_error","code":"not_found"}}\n';
+    log_format opencode_readable '[$time_local] id=$request_id | '
+                                 '$request_method $request_uri -> $status | '
+                                 'Client: $remote_addr (cf: $http_cf_connecting_ip, auth: $http_authorization) | '
+                                 'Upstream: $upstream_addr (status: $upstream_status, latency: ${upstream_response_time}s, ttfb: ${upstream_header_time}s) | '
+                                 'Size: ${content_length}B in / ${body_bytes_sent}B out';
+
+    access_log ${LOG_PATH} opencode_readable;
+    error_log  ${ERROR_LOG_PATH} warn;
+
+    server {
+        listen ${PORT};
+        server_name _;
+        default_type application/json;
+
+        client_body_buffer_size 1M;
+        client_max_body_size 50M;
+
+        location = /healthz {
+            return 200 '{"status":"ok","engine":"opencode-proxy","port":"${PORT}"}\n';
+        }
+
+        rewrite ^/(responses|chat/completions|models|embeddings)(.*)$ /v1/$1$2 last;
+
+        location /v1/ {
+            if ($request_method = 'OPTIONS') {
+                add_header 'Access-Control-Allow-Origin' '*' always;
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+                add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Accept' always;
+                add_header 'Content-Type' 'text/plain; charset=utf-8';
+                add_header 'Content-Length' 0;
+                return 204;
+            }
+
+            if ($auth_valid = 0) {
+                return 401 '{"error":{"message":"Invalid Virtual API Key. Unauthorized proxy access.","type":"invalid_request_error","code":"invalid_api_key"}}\n';
+            }
+
+            proxy_pass ${UPSTREAM_SCHEME}://${UPSTREAM_HOST}:${UPSTREAM_PORT};
+
+            proxy_ssl_server_name on;
+            proxy_ssl_name ${UPSTREAM_HOST};
+            proxy_ssl_protocols TLSv1.2 TLSv1.3;
+
+            proxy_pass_request_body on;
+            proxy_set_header Host ${UPSTREAM_HOST};
+            proxy_set_header Authorization "Bearer ${MIMO_API_KEY}";
+            proxy_set_header User-Agent $outbound_user_agent;
+            proxy_set_header Content-Type $outbound_content_type;
+            proxy_set_header Accept $http_accept;
+            proxy_set_header X-Request-ID $request_id;
+            add_header X-Request-ID $request_id always;
+            add_header Access-Control-Allow-Origin '*' always;
+
+            proxy_set_header X-Forwarded-For "";
+            proxy_set_header X-Real-IP "";
+            proxy_set_header X-Forwarded-Proto "";
+            proxy_set_header X-Forwarded-Host "";
+
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_buffering off;
+            proxy_cache off;
+            chunked_transfer_encoding on;
+
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 600s;
+            proxy_read_timeout 600s;
+        }
+
+        location / {
+            return 404 '{"error":{"message":"Endpoint not found. OpenCode proxy routes /responses, /chat/completions, /models.","type":"invalid_request_error","code":"not_found"}}\n';
+        }
     }
 }

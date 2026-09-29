@@ -1,20 +1,22 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "mimo": {
-      "name": "Xiaomi MiMo (Phone Proxy)",
+    "phone-proxy": {
+      "name": "OpenCode ARM64 Reverse Proxy",
       "npm": "@ai-sdk/openai",
       "options": {
-        "baseURL": "http://<PHONE_IP_OR_DOCKER_HOST>:8080/v1",
+        "baseURL": "http://192.168.1.138:8080",
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
-        "hana/mimo-v2.5": {
-          "id": "hana/mimo-v2.5",
-          "name": "MiMo 2.5 (Phone Proxy)"
+        "gpt-6-sol": {
+          "name": "GPT-6 Sol (Phone Proxy)"
+        },
+        "vgpt/gpt-6-sol": {
+          "name": "GPT-6 Sol (vgpt/gpt-6-sol)"
         }
       }
     }
   },
-  "model": "mimo/hana/mimo-v2.5"
+  "model": "phone-proxy/gpt-6-sol"
 }

@@ -1,350 +1,228 @@
-# ARM64 proxy for OpenAI compatiable api
+# ARM64 OpenCode Reverse Proxy
 
-Reverse proxy using **Nginx** for ARM64 hardware (Android/Termux or Docker). Avoid single token plan constraint by multiplexing multiple downstream clients (via VS Code, OpenCode, Cursor, NextChat) through a single upstream provider account (any OpenAI-compatible provider).
+High-performance reverse proxy for ARM64 Android (Termux) and Linux/Docker, engineered specifically for **OpenCode v2** and OpenAI-compatible inference providers.
 
-The proxy strips client network fingerprints, isolates tenants with virtual keys, injects canonical `opencode/1.18.21` telemetry, and streams encrypted HTTPS responses.
+Enables multiple local or remote developer clients (Linux/Debian, Windows, macOS) to multiplex through a single upstream account (e.g. `api.vilao.ai` / `gpt-6-sol`) over local Wi-Fi or Cloudflare Tunnel WAN.
 
 ---
 
 ## 1. System Architecture & Traffic Flow
 
 ```text
-┌─────────────────────────┐
-│ User A: OpenCode / IDE  │ (Plaintext HTTP + sk-userA-key)
-└────────────┬────────────┘
-             │                                  ARM64 Phone / Termux (192.168.22.86:8080)
-             ├──────────────────────────────► ┌──────────────────────────────────────────┐
-             │                                │ 1. Ingress: Listen on 0.0.0.0:8080       │
-┌────────────┴────────────┐                   │ 2. Auth Gate: Validate virtual key       │
-│ User B: OpenCode / IDE  │ (Plaintext HTTP)  │ 3. Strip: Drop X-Forwarded-For, Real-IP  │
-└─────────────────────────┘                   │ 4. Rewrite: Force opencode User-Agent    │
-                                              │ 5. Egress TLS: Establish HTTPS Handshake │
-                                              └────────────────────┬─────────────────────┘
-                                                                   │
-                                       (Encrypted HTTPS + Master Key + Canonical Headers)
-                                                                   ▼
-                                              ┌──────────────────────────────────────────┐
-                                              │ Upstream AI Provider                     │
-                                              │ (api.vilao.ai / MiMo V2.5 / OpenAI API)  │
-                                              └──────────────────────────────────────────┘
+[OpenCode Client - Linux / Win / Mac]
+  │  (Plaintext HTTP + Virtual Key: sk-userA / sk-userB)
+  │  POST /responses (with 35KB tool schemas) OR /v1/responses
+  ▼
+[ARM64 Reverse Proxy - Termux / Docker]
+  │  1. Ingress: Listen on port 8080 (1MB memory buffer)
+  │  2. Path Unification: rewrite ^/(responses|chat/completions|models|embeddings) -> /v1/$1
+  │  3. Tenant Auth Gate: O(1) virtual key validation (401 on unauthorized)
+  │  4. Privacy Scrub: Drop X-Forwarded-For, X-Real-IP, tracking headers
+  │  5. Header Injection: Inject master MIMO_API_KEY + opencode User-Agent
+  │  6. Zero-Buffer Egress: HTTP/1.1 SSE chunked streaming
+  ▼
+[Upstream AI Provider]
+  https://api.vilao.ai/v1/responses (gpt-6-sol)
 ```
 
 ---
 
-## 2. Repository Structure
+## 2. OpenCode Architecture & Protocol Resolution
+
+### The Debian / OpenCode Dilemma
+OpenCode v2 differs from standard REST tools:
+1. **Native Agent Protocol**: OpenCode dispatches tool-calling requests to `POST /responses` (not `/chat/completions`), sending 35KB–50KB schema definitions per turn.
+2. **Path Variance**:
+   - `baseURL: "http://host:8080"` dispatches to `POST /responses`.
+   - `baseURL: "http://host:8080/v1"` dispatches to `POST /v1/responses`.
+   - Generic proxies lacking root `/responses` routing return `404 Not Found`.
+3. **Background Daemon Socket Stalling**:
+   OpenCode runs a background daemon (`opencode service`). When a request encounters a 404 or connection error, the daemon enters a retry loop (`[retrying in 3s #2]`) and caches the failed socket. Subsequent edits to `opencode.json` are ignored until the daemon process is terminated (`pkill -f opencode`).
+
+### The Proxy Solution
+- **Path Rewrite Rule**:
+  ```nginx
+  rewrite ^/(responses|chat/completions|models|embeddings)(.*)$ /v1/$1$2 last;
+  ```
+  Both `POST /responses` and `POST /v1/responses` resolve to upstream `/v1/responses` identically.
+- **Large Memory Buffer**:
+  `client_body_buffer_size 1M;` holds 35KB–50KB OpenCode tool schemas completely in RAM, avoiding disk write overhead on mobile flash storage.
+- **Unbuffered SSE Streaming**:
+  `proxy_buffering off; chunked_transfer_encoding on;` streams generation tokens instantly to the client terminal with minimal latency.
+
+---
+
+## 3. Repository Structure
 
 ```text
 arm64-openai-proxy/
-├── .env.example              # Environment variables template (safe defaults)
-├── .gitignore                # Git exclusions (strictly blocks secrets)
-├── docker-compose.yml        # Multi-arch Docker runner (ARM64/AMD64)
-├── README.md                 # Master architecture & deployment guide
+├── .env.example              # Environment variables template
+├── .gitignore                # Git exclusions
+├── docker-compose.yml        # Docker runner (mounts single-source template)
+├── README.md                 # System documentation & deployment guide
 │
-├── config/                   # Configuration files & templates
-│   ├── nginx.conf.template   # Dynamic Nginx proxy template
-│   ├── opencode.json         # Client configuration (local Wi-Fi)
-│   └── opencode.json.example # OpenCode client configuration template
+├── config/
+│   ├── nginx.conf.template   # Single source of truth Nginx configuration
+│   ├── opencode.json         # Active OpenCode configuration
+│   └── opencode.json.example # OpenCode configuration template
 │
-├── scripts/                  # Deployment & operational scripts
-│   ├── deploy-termux.sh      # 1-click Termux ARM64 installer (with wake-lock)
-│   └── trace-live.sh         # Live colored dual-stream HTTP trace viewer
+├── scripts/
+│   ├── deploy-termux.sh      # 1-command installer for Termux ARM64
+│   ├── tunnel-termux.sh      # Cloudflare Tunnel WAN exposure
+│   └── trace-live.sh         # Real-time colored telemetry monitor
 │
-└── tests/                    # Testing harnesses & mocks
-    ├── mock-upstream.js      # Mock API server with header inspection
-    ├── test-payload.json     # Sample cURL JSON payload
-    ├── test-proxy.ps1        # Proxy assertion script
-    └── verify-traffic.ps1    # 8-point automated test harness
+└── tests/
+    ├── test-opencode.sh      # POSIX 7-point assertion test suite
+    └── test-opencode.ps1     # Windows PowerShell test harness
 ```
 
 ---
 
-## 3. How the Encrypt / Decrypt Pipeline Works
+## 4. Setup & Deployment
 
-The proxy operates as a **TLS Termination and Bridging Gateway**:
-
-### Downstream: Plaintext HTTP (Local Wi-Fi)
-* **Path**: Developer PC (OpenCode / VS Code) ➔ Phone Proxy (`http://192.168.22.86:8080`).
-* **Protocol**: Unencrypted HTTP/1.1 over local trusted Wi-Fi.
-* **Why**:
-  * Eliminates the need to generate, distribute, and trust custom self-signed SSL certificates on every developer machine.
-  * Allows Nginx to inspect, validate, and rewrite headers in memory without breaking TLS encryption signatures.
-  * Local Wi-Fi is protected behind home/office network firewalls.
-
-### In-Memory Transformation (The Proxy Boundary)
-Because Nginx receives the downstream request in plaintext, its rewrite engine:
-1. Validates the virtual client token (`sk-userA-vkey-001`) via an O(1) hash map.
-2. Strips client IP tracking headers (`X-Forwarded-For`, `X-Real-IP`, `X-Forwarded-Proto`).
-3. Replaces the client token with the master upstream token (`MIMO_API_KEY`).
-4. Overwrites the client `User-Agent` to the canonical string: `opencode/1.18.21 ai-sdk/...`.
-
-### Upstream: Encrypted HTTPS (Public Internet)
-* **Path**: Phone Proxy (Termux) ➔ Provider (`https://api.vilao.ai:443`).
-* **Protocol**: Encrypted HTTPS (TLS 1.2 / TLS 1.3).
-* **How Encryption Works**:
-  * Nginx initiates a secure TLS handshake with the provider, negotiating AES-GCM or ChaCha20 cipher suites with SNI alignment (`proxy_ssl_server_name on`).
-  * Nginx encrypts the rewritten request headers and body before sending them across the public internet.
-  * To ISPs and eavesdroppers, all wire traffic is completely encrypted and indistinguishable from an official single-user OpenCode desktop client.
-
-### Response Decryption & Zero-Buffering Streaming
-* The upstream AI provider streams encrypted SSE (Server-Sent Events) tokens back to the phone.
-* Nginx's OpenSSL layer **decrypts** the TLS records in real time.
-* With `proxy_buffering off; chunked_transfer_encoding on;`, Nginx immediately pipes each plaintext chunk directly into the client's HTTP connection without waiting for the full response to finish.
-
----
-
-## 3. Technology Stack & Engines
-
-| Layer | Technology | Version / Details | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Reverse Proxy** | **Nginx** | `v1.31.6` (Alpine & Termux ARM64) | Core routing, auth map, header rewriting, SSE proxy |
-| **Mobile Runtime** | **Android / Termux** | ARM64 (`aarch64`) / Android 7.0+ | Hosts proxy on physical Samsung smartphone |
-| **Process Daemon** | **termux-wake-lock** | Termux native API | Prevents Android OS Doze mode from sleeping TCP sockets |
-| **Local Testing** | **Docker Desktop** | `nginx:alpine` + QEMU multi-arch | Emulates ARM64 container on Windows PC |
-| **Templating** | **GNU envsubst** | `gettext` package | Injects environment variables into `nginx.conf` at boot |
-| **Test Harness** | **Node.js & PowerShell** | Node.js v24 / PowerShell 5.1/7 | Automated 8-assertion unit testing & header inspection |
-| **Downstream Client**| **OpenCode** | `sst-dev.opencode` / OpenCode v2 | AI coding agent in VS Code |
-| **Upstream Target** | **Xiaomi MiMo / Hana**| `api.vilao.ai` (`hana/mimo-v2.5`) | Model inference provider |
-
----
-
-## 4. Header Transformation Matrix
-
-| Header | Inbound (from Client) | Outbound (to Provider) | Purpose |
-| :--- | :--- | :--- | :--- |
-| `Authorization` | `Bearer sk-userA-vkey-001` | `Bearer <OFFICIAL_MASTER_KEY>` | Masks individual user keys with single master credential |
-| `User-Agent` | `Cursor/0.45` / variable | `opencode/1.18.21 ai-sdk/...` | Standardizes telemetry signature to 1 user |
-| `Host` | `<PHONE_IP>:8080` | `api.vilao.ai` | Aligns SNI and virtual host |
-| `X-Forwarded-For` | Client IP (`192.168.x.x`) | *Dropped (Empty)* | Prevents leaking downstream network topology |
-| `X-Real-IP` | Client IP | *Dropped (Empty)* | Prevents leaking developer workstation IP |
-| `Content-Type` | `application/json` | `application/json` | Transparent payload pass-through |
-
----
-
-## 6. Verification & Test Evidence
-
-### A. Windows Docker ARM64 Automated Test Suite
-Ran [`verify-traffic.ps1`](file:///d:/proxy-test/tests/verify-traffic.ps1):
-```text
-======================================================================
- AI REVERSE PROXY: TRAFFIC & HEADER INSPECTION TEST HARNESS
-======================================================================
---- [SUITE 1] Downstream Auth Gate ---
- [PASS] Health Endpoint (/healthz) (Engine: nginx, Port: 8080)
- [PASS] Reject Missing Token (HTTP 401 Unauthorized)
- [PASS] Reject Invalid Token (HTTP 401 Unauthorized)
-
---- [SUITE 2] Live Upstream (api.vilao.ai - hana/mimo-v2.5) ---
- [PASS] Live Upstream Model Listing (Discovered model: mimo-v2.5 via User A key)
- [PASS] Live Chat Completion via User B (Response: TEST_OK)
-
---- [SUITE 3] Canonical Header Assertion via Mock Server ---
- [PASS] Upstream User-Agent Canonicalized:
-        Inbound: Cursor/0.45.2 -> Outbound to Upstream: opencode/1.18.21 ai-sdk/...
- [PASS] Master API Key Injected:
-        Inbound: sk-userA-vkey-001 -> Outbound: Bearer sk-235b...
- [PASS] Client IP Tracking Dropped:
-        X-Forwarded-For: <DROPPED>, X-Real-IP: <DROPPED>
-======================================================================
- SUMMARY: 8 Passed, 0 Failed
-======================================================================
+### Step 1: Configure Environment
+Copy `.env.example` to `.env` and configure your credentials:
+```bash
+cp .env.example .env
 ```
-
-### B. Physical Samsung Android ARM64 Phone Live Test
-Request dispatched from PC across local Wi-Fi to phone (`192.168.22.86:8080`):
-```powershell
-curl.exe -i -H "Authorization: Bearer sk-userA-vkey-001" http://192.168.22.86:8080/v1/models
-```
-**Upstream Response (HTTP 200 OK from Hana Gateway via Phone):**
-```http
-HTTP/1.1 200 OK
-Server: nginx/1.31.6
-Content-Type: application/json; charset=utf-8
-
-{"data":[{"active":true,"id":"mimo-v2.5","model_id":"mimo-v2.5","provider_prefix":"hana"}],"object":"list"}
+Edit `.env`:
+```env
+PORT=8080
+UPSTREAM_HOST=api.vilao.ai
+UPSTREAM_PORT=443
+UPSTREAM_SCHEME=https
+MIMO_API_KEY=sk-your-upstream-secret-key
+USER_A_KEY=sk-userA-vkey-001
+USER_B_KEY=sk-userB-vkey-002
+MODEL_NAME=gpt-6-sol
 ```
 
 ---
 
-## 7. Deployment Guides
-
-### Option 1: Physical Phone Deployment (Termux ARM64)
-1. Install Termux APK from [GitHub Releases](https://github.com/termux/termux-app/releases) (*not Google Play Store*).
-2. Set Termux battery to **Unrestricted** in Android Settings.
-3. Clone or copy repo to Termux and run:
+### Step 2: Deploy on Android Phone (Termux ARM64)
+1. Install Termux from [GitHub Releases](https://github.com/termux/termux-app/releases) and set battery usage to **Unrestricted** in Android Settings.
+2. In Termux, run:
    ```bash
-   chmod +x scripts/deploy-termux.sh
-   ./scripts/deploy-termux.sh
+   pkg install -y git
+   git clone https://github.com/Vinhnguyen1227/arm64-openai-proxy.git
+   cd arm64-openai-proxy
+   cp .env.example .env
+   # Edit .env with your MIMO_API_KEY
+   bash scripts/deploy-termux.sh
    ```
-4. Script installs Nginx, activates wake-lock, starts the daemon, and prints the phone Wi-Fi IP address.
-
-### Option 2: Local Windows Testing (Docker Compose)
-1. Launch container:
-   ```powershell
-   docker compose up -d
-   ```
-2. Verify container architecture:
-   ```powershell
-   docker exec mimo-nginx-proxy uname -m
-   # Output: aarch64
-   ```
+3. The script configures Nginx, enables `termux-wake-lock`, starts the service, and outputs the local Wi-Fi IP (e.g. `http://192.168.1.138:8080`).
 
 ---
 
-## 8. Connecting OpenCode in VS Code
+### Step 3: (Optional) Public WAN Access via Cloudflare Tunnel
+To connect from outside the local Wi-Fi:
+```bash
+bash scripts/tunnel-termux.sh
+```
+Cloudflare will assign an ephemeral public URL (e.g. `https://xxxx.trycloudflare.com`). Use this URL as `baseURL` in `opencode.json`.
 
-Copy [`config/opencode.json.example`](file:///d:/proxy-test/config/opencode.json.example) into your project root as `opencode.json`:
+---
+
+### Step 4: Alternative Deployment (Docker)
+On any Docker-enabled host:
+```bash
+docker compose up -d
+```
+
+---
+
+## 5. Client Configuration (OpenCode)
+
+Create or update `opencode.json` (or `~/.config/opencode/config.json`):
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "mimo": {
-      "name": "Xiaomi MiMo (Phone Proxy)",
+    "phone-proxy": {
+      "name": "OpenCode ARM64 Reverse Proxy",
       "npm": "@ai-sdk/openai",
       "options": {
-        "baseURL": "http://192.168.22.86:8080/v1",
+        "baseURL": "http://192.168.1.138:8080",
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
-        "hana/mimo-v2.5": {
-          "id": "hana/mimo-v2.5",
-          "name": "MiMo 2.5 (Phone Proxy)"
-        }
-      }
-    }
-  },
-  "model": "mimo/hana/mimo-v2.5"
-}
-```
-
-In OpenCode TUI, type `/model` and select `mimo/hana/mimo-v2.5`. All chat completions will route through the proxy phone.
-
----
-
-## 9. Real-Time Telemetry & Human-Readable Log Tracing
-
-Watch incoming client requests and outgoing upstream metrics live in Termux on your phone:
-
-### Option A: Standard Direct Tail
-```bash
-tail -f $PREFIX/var/log/nginx/access.log
-```
-
-### Option B: Formatted Live Monitor (Colored)
-```bash
-chmod +x scripts/trace-live.sh
-./scripts/trace-live.sh
-```
-
-**Clean Single-Line Log Output Format**:
-```text
-[28/Sep/2026:10:58:05 +0700] id=5ed4c71e | POST /v1/responses -> 503 | Client: 192.168.22.76 (cf: -, auth: Bearer sk-userA-vkey-001) | Upstream: 103.252.123.86:443 (status: 503, latency: 0.166s, ttfb: 0.165s) | Size: 28987B in / 176B out
-```
-
-* Each transaction displays:
-  * **`Timestamp & id`**: Local time and transaction `$request_id` (also injected as `X-Request-ID` in HTTP response headers).
-  * **`Method & URI`**: `$request_method $request_uri` -> HTTP status code (`$status`).
-  * **`Client Info`**: Client IP (`$remote_addr`), Cloudflare IP if tunneled (`$http_cf_connecting_ip`), and virtual authorization key.
-  * **`Upstream Metrics`**: Resolved upstream IP:port, upstream HTTP status, response latency, and Time to First Token (`ttfb`).
-  * **`Payload Sizes`**: Inbound request size (`${content_length}B in`) and outbound response size (`${body_bytes_sent}B out`).
-  * *Note*: Raw JSON request bodies are explicitly excluded from the log stream to prevent terminal clutter from large coding-agent prompts.
-
----
-
-## 10. Cross-Platform Verification & Debian / Linux Client Guide
-
-Use the portable POSIX test suite (`tests/test-proxy.sh`) to verify network connectivity, TLS handshake, auth gates, streaming, and buffer capacity from any **Debian**, **Ubuntu**, **macOS**, or **Linux** machine.
-
-### A. Run Automated POSIX Test Suite on Debian
-
-```bash
-# Clone or copy repository on Debian
-git clone https://github.com/Vinhnguyen1227/arm64-openai-proxy.git
-cd arm64-openai-proxy
-
-# Execute test suite against your Cloudflare Tunnel URL or LAN IP
-chmod +x tests/test-proxy.sh
-./tests/test-proxy.sh --url https://<YOUR_TUNNEL_URL>.trycloudflare.com --key sk-userB-vkey-002 --model gpt-6-sol
-```
-
-**Expected Test Output (7/7 Pass):**
-```text
-======================================================================
- AI REVERSE PROXY: CROSS-PLATFORM TEST SUITE (POSIX BASH)
- Target URL : https://<YOUR_TUNNEL_URL>.trycloudflare.com
- Virtual Key: sk-userB-vkey-0...
- Model Target: gpt-6-sol
- OS Detected: Linux x86_64
-======================================================================
-
---- [SUITE 1] Infrastructure & Connectivity ---
- [PASS] Health Check Endpoint (/healthz)
-        HTTP 200 | {"status":"ok","engine":"nginx","port":"8080"}
-
---- [SUITE 2] Security & Virtual Key Gate ---
- [PASS] Reject Missing Token (HTTP 401)
-        Unauthenticated request correctly blocked
- [PASS] Reject Invalid Token (HTTP 401)
-        Invalid virtual key correctly blocked
-
---- [SUITE 3] Upstream Discovery & Authentication ---
- [PASS] Model Discovery (/v1/models)
-        HTTP 200 | Found target model: gpt-6-sol
-
---- [SUITE 4] OpenCode Chat & Completion Protocol ---
- [PASS] Standard Chat Completion (/v1/chat/completions)
-        HTTP 200 | Assistant replied with Pong
-
---- [SUITE 5] Real-Time Streaming (SSE / Unbuffered) ---
- [PASS] Server-Sent Events Streaming (stream: true)
-        HTTP 200 | Captured 10 SSE data chunks
-
---- [SUITE 6] Large Payload & Buffer Validation ---
- [PASS] Large Payload Pass-Through (32035 bytes)
-        HTTP 200 | Large buffer accepted without 413 or truncation
-
-======================================================================
- TEST SUMMARY: 7 Passed, 0 Failed (Total: 7)
-======================================================================
-SUCCESS: The proxy is fully verified and ready for OpenCode on all operating systems!
-```
-
----
-
-### B. Configuring OpenCode on Debian
-
-On the Debian machine, create `~/.config/opencode/config.json` (or `opencode.json` in the workspace root):
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "proxy-gpt6": {
-      "name": "Proxy GPT-6",
-      "npm": "@ai-sdk/openai",
-      "options": {
-        "baseURL": "https://<YOUR_TUNNEL_URL>.trycloudflare.com/v1",
-        "apiKey": "sk-userB-vkey-002"
-      },
-      "models": {
         "gpt-6-sol": {
-          "name": "GPT-6 Sol"
+          "name": "GPT-6 Sol (Phone Proxy)"
+        },
+        "vgpt/gpt-6-sol": {
+          "name": "GPT-6 Sol (vgpt/gpt-6-sol)"
         }
       }
     }
   },
-  "model": "proxy-gpt6/gpt-6-sol"
+  "model": "phone-proxy/gpt-6-sol"
 }
 ```
 
-### C. Quick Debian One-Liner Test via `curl`
+> **Note**: Both `"baseURL": "http://192.168.1.138:8080"` and `"baseURL": "http://192.168.1.138:8080/v1"` are supported seamlessly.
 
-Verify without OpenCode using standard Debian curl:
+---
+
+## 6. Live Telemetry & Log Monitoring
+
+Monitor incoming client calls and upstream metrics live on the phone:
 ```bash
-curl -s -X POST https://<YOUR_TUNNEL_URL>.trycloudflare.com/v1/chat/completions \
-  -H "Authorization: Bearer sk-userB-vkey-002" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gpt-6-sol","messages":[{"role":"user","content":"ping"}]}'
-# Expected response: {"choices":[{"message":{"content":"pong",...}}],...}
+bash scripts/trace-live.sh
 ```
 
+**Output format**:
+```text
+[29/Sep/2026:09:15:20 +0700] id=a1b2c3d4 | POST /responses -> 200 | Client: 192.168.1.197 (cf: -, auth: Bearer sk-userB-vkey-002) | Upstream: 103.252.123.86:443 (status: 200, latency: 1.25s, ttfb: 0.85s) | Size: 34812B in / 1250B out
+```
+
+- **`id`**: Unique request identifier passed downstream and upstream (`X-Request-ID`).
+- **`Method & URI`**: Client endpoint and returned HTTP status.
+- **`Client`**: Client IP address and authenticated tenant virtual key.
+- **`Upstream`**: Target IP, upstream status code, round-trip latency, and Time to First Token (`ttfb`).
+- **`Size`**: Inbound payload size (e.g. 35KB tools schema) and outbound response size.
+
+---
+
+## 7. Verification & Automated Test Harness
+
+### On Windows Workstation (PowerShell)
+```powershell
+.\tests\test-opencode.ps1 -TargetUrl "http://192.168.1.138:8080" -ApiKey "sk-userA-vkey-001" -Model "gpt-6-sol"
+```
+
+### On Linux / Debian / macOS / Termux (POSIX Bash)
+```bash
+bash tests/test-opencode.sh "http://192.168.1.138:8080" "sk-userB-vkey-002" "gpt-6-sol"
+```
+
+**Test Suite Coverage (7 Assertions)**:
+1. Healthcheck (`GET /healthz` -> 200 OK)
+2. Tenant Auth Gate (Invalid keys rejected with 401)
+3. CORS Preflight (`OPTIONS /responses` -> 204 No Content)
+4. Model Discovery (`GET /models` unified rewrite -> 200 OK)
+5. Native OpenCode (`POST /responses` -> 200 OK)
+6. Standard OpenCode (`POST /v1/responses` -> 200 OK)
+7. 35KB Tool Schema Payload Buffer Handling (No 413 or disk spill)
+
+---
+
+## 8. Debian Client Troubleshooting
+
+If OpenCode on Debian reports connection errors:
+1. **Kill Stale Background Daemons**:
+   ```bash
+   pkill -f opencode
+   ```
+2. **Verify Connectivity**:
+   ```bash
+   curl -I http://192.168.1.138:8080/healthz
+   ```
+3. **Verify Upstream via curl**:
+   ```bash
+   curl -s -X POST http://192.168.1.138:8080/responses \
+     -H "Authorization: Bearer sk-userB-vkey-002" \
+     -H "Content-Type: application/json" \
+     -d '{"model":"gpt-6-sol","input":"ping"}'
+   ```
+4. Restart `opencode` in your project workspace.
