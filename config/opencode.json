@@ -9,11 +9,8 @@
         "apiKey": "sk-userA-vkey-001"
       },
       "models": {
-        "gpt-6-sol": {
-          "name": "GPT-6 Sol (Phone Proxy)"
-        },
         "vgpt/gpt-6-sol": {
-          "name": "GPT-6 Sol (vgpt/gpt-6-sol)"
+          "name": "GPT-6 Sol (Phone Proxy)"
         }
       }
     }

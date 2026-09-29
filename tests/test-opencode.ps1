@@ -84,8 +84,8 @@ try {
         input = "ping"
     } | ConvertTo-Json -Compress
 
-    $res = Invoke-WebRequest -Uri "$TargetUrl/responses" -Headers $headers -Method Post -Body $body -TimeoutSec 30
-    Assert-Result "Native POST /responses returned 200 OK" ($res.StatusCode -eq 200) "Status: $($res.StatusCode)"
+    $res = Invoke-RestMethod -Uri "$TargetUrl/responses" -Headers $headers -Method Post -Body $body -TimeoutSec 30
+    Assert-Result "Native POST /responses returned 200 OK" ($res.id -ne $null -or $res.status -eq "completed") "Response ID: $($res.id)"
 } catch {
     Assert-Result "Native POST /responses returned 200 OK" $false $_.Exception.Message
 }
@@ -102,8 +102,8 @@ try {
         input = "ping"
     } | ConvertTo-Json -Compress
 
-    $res = Invoke-WebRequest -Uri "$TargetUrl/v1/responses" -Headers $headers -Method Post -Body $body -TimeoutSec 30
-    Assert-Result "POST /v1/responses returned 200 OK" ($res.StatusCode -eq 200) "Status: $($res.StatusCode)"
+    $res = Invoke-RestMethod -Uri "$TargetUrl/v1/responses" -Headers $headers -Method Post -Body $body -TimeoutSec 30
+    Assert-Result "POST /v1/responses returned 200 OK" ($res.id -ne $null -or $res.status -eq "completed") "Response ID: $($res.id)"
 } catch {
     Assert-Result "POST /v1/responses returned 200 OK" $false $_.Exception.Message
 }
@@ -128,8 +128,8 @@ try {
         )
     } | ConvertTo-Json -Depth 5 -Compress
 
-    $res = Invoke-WebRequest -Uri "$TargetUrl/responses" -Headers $headers -Method Post -Body $body -TimeoutSec 30
-    Assert-Result "35KB tool schema processed without 413 or buffer error" ($res.StatusCode -eq 200) "Status: $($res.StatusCode)"
+    $res = Invoke-RestMethod -Uri "$TargetUrl/responses" -Headers $headers -Method Post -Body $body -TimeoutSec 30
+    Assert-Result "35KB tool schema processed without 413 or buffer error" ($res.id -ne $null -or $res.status -eq "completed") "Response ID: $($res.id)"
 } catch {
     Assert-Result "35KB tool schema processed without 413 or buffer error" $false $_.Exception.Message
 }
