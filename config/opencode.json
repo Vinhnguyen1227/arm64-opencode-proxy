@@ -18,5 +18,5 @@
       }
     }
   },
-  "model": "phone-proxy/gpt-6-sol"
+  "model": "phone-proxy/vgpt/gpt-6-sol"
 }
