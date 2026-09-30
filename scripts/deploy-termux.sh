@@ -23,8 +23,10 @@ export UPSTREAM_SCHEME="${UPSTREAM_SCHEME:-https}"
 export MIMO_API_KEY="${MIMO_API_KEY:-}"
 export USER_A_KEY="${USER_A_KEY:-sk-userA-vkey-001}"
 export USER_B_KEY="${USER_B_KEY:-sk-userB-vkey-002}"
-export LOG_PATH="${LOG_PATH:-$PREFIX/var/log/nginx/access.log}"
-export ERROR_LOG_PATH="${ERROR_LOG_PATH:-$PREFIX/var/log/nginx/error.log}"
+export ACCESS_LOG_PATH="${ACCESS_LOG_PATH:-${LOG_PATH:-$PREFIX/var/log/nginx/access.log}}"
+export ERROR_LOG_PATH="${ERROR_LOG_PATH:-$PREFIX/var/log/nginx/error_layer.log}"
+export DEBUG_LOG_PATH="${DEBUG_LOG_PATH:-$PREFIX/var/log/nginx/debug.log}"
+export NGINX_SYS_LOG_PATH="${NGINX_SYS_LOG_PATH:-$PREFIX/var/log/nginx/error.log}"
 
 if [ -z "$MIMO_API_KEY" ]; then
     echo "[!] Warning: MIMO_API_KEY is unset in .env. Upstream authentication will fail."
@@ -39,7 +41,7 @@ if [ ! -f "$TEMPLATE_FILE" ]; then
     exit 1
 fi
 
-envsubst '$PORT $UPSTREAM_HOST $UPSTREAM_PORT $UPSTREAM_SCHEME $MIMO_API_KEY $USER_A_KEY $USER_B_KEY $LOG_PATH $ERROR_LOG_PATH' < "$TEMPLATE_FILE" > "$PREFIX/etc/nginx/nginx.conf"
+envsubst '$PORT $UPSTREAM_HOST $UPSTREAM_PORT $UPSTREAM_SCHEME $MIMO_API_KEY $USER_A_KEY $USER_B_KEY $ACCESS_LOG_PATH $ERROR_LOG_PATH $DEBUG_LOG_PATH $NGINX_SYS_LOG_PATH' < "$TEMPLATE_FILE" > "$PREFIX/etc/nginx/nginx.conf"
 
 nginx -t
 

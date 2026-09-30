@@ -164,23 +164,47 @@ Create or update `opencode.json` (or `~/.config/opencode/config.json`):
 
 ---
 
-## 6. Live Telemetry & Log Monitoring
+## 6. Multi-Layer Logging & Diagnostics
 
-Monitor incoming client calls and upstream metrics live on the phone:
+Logging is organized into 3 distinct operational layers with request correlation:
+
+### Log Layers
+
+1. **Layer 1: Access Log** (`access.log`):
+   One compact record per completed client request. Used as the standard live trace log.
+   ```text
+   [30/Sep/2026:15:10:05 +0700] INFO  [7f3a91bc] POST /responses -> api.vilao.ai 200 0.42s auth=userA req=34812B resp=1250B
+   ```
+2. **Layer 2: Error Log** (`error_layer.log`):
+   Emitted *only* when a request fails or encounters abnormal conditions with stable error codes (`PX001` - `PX012`).
+   ```text
+   [30/Sep/2026:15:11:12 +0700] ERROR [e4b1089a] error_code=PX011 error=AUTH_UNAUTHORIZED upstream=local-proxy auth=unauthorized client=192.168.22.87 duration=0.001s
+   ```
+3. **Layer 3: Debug Log** (`debug.log`):
+   Internal execution trace containing matched route, upstream address, auth flag, connection timings, and TTFB.
+   ```text
+   [30/Sep/2026:15:10:05 +0700] DEBUG [7f3a91bc] route=/responses upstream=103.252.123.86:443 auth_valid=1 client=192.168.22.87 ttfb=0.85s connect_time=0.045s
+   ```
+
+### Live Log Streaming (Pure White Text)
+
+Stream logs in Termux or terminal:
 ```bash
+# Standard live access trace (Layer 1)
 bash scripts/trace-live.sh
-```
 
-**Output format**:
-```text
-[29/Sep/2026:09:15:20 +0700] id=a1b2c3d4 | POST /responses -> 200 | Client: 192.168.1.197 (cf: -, auth: Bearer sk-userB-vkey-002) | Upstream: 103.252.123.86:443 (status: 200, latency: 1.25s, ttfb: 0.85s) | Size: 34812B in / 1250B out
-```
+# Errors only (Layer 2)
+bash scripts/trace-live.sh --errors
 
-- **`id`**: Unique request identifier passed downstream and upstream (`X-Request-ID`).
-- **`Method & URI`**: Client endpoint and returned HTTP status.
-- **`Client`**: Client IP address and authenticated tenant virtual key.
-- **`Upstream`**: Target IP, upstream status code, round-trip latency, and Time to First Token (`ttfb`).
-- **`Size`**: Inbound payload size (e.g. 35KB tools schema) and outbound response size.
+# Debug / internal details (Layer 3)
+bash scripts/trace-live.sh --debug
+
+# Interleaved all layers
+bash scripts/trace-live.sh --all
+
+# Reconstruct full lifecycle for a specific request ID
+bash scripts/trace-live.sh --trace 7f3a91bc
+```
 
 ---
 

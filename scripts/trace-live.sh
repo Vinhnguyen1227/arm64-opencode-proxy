@@ -7,39 +7,49 @@ if [ -f "$REPO_DIR/.env" ]; then
     export $(grep -v '^#' "$REPO_DIR/.env" | xargs)
 fi
 
-DEFAULT_LOG="${PREFIX:-/data/data/com.termux/files/usr}/var/log/nginx/access.log"
-LOG_FILE="${1:-${LOG_PATH:-$DEFAULT_LOG}}"
+LOG_DIR="${PREFIX:-/data/data/com.termux/files/usr}/var/log/nginx"
+ACCESS_LOG="${ACCESS_LOG_PATH:-$LOG_DIR/access.log}"
+ERROR_LOG="${ERROR_LOG_PATH:-$LOG_DIR/error_layer.log}"
+DEBUG_LOG="${DEBUG_LOG_PATH:-$LOG_DIR/debug.log}"
 
-if [ ! -f "$LOG_FILE" ]; then
-    echo "[!] Log file not found at $LOG_FILE. Creating it..."
-    mkdir -p "$(dirname "$LOG_FILE")"
-    touch "$LOG_FILE"
-fi
+mkdir -p "$LOG_DIR"
+touch "$ACCESS_LOG" "$ERROR_LOG" "$DEBUG_LOG"
 
-echo "[+] Streaming live telemetry from: $LOG_FILE"
+MODE="${1:-}"
 
-tail -n 20 -F "$LOG_FILE" | awk '
-BEGIN {
-    CYAN    = "\033[1;36m"
-    GREEN   = "\033[1;32m"
-    YELLOW  = "\033[1;33m"
-    RED     = "\033[1;31m"
-    MAGENTA = "\033[1;35m"
-    BLUE    = "\033[1;34m"
-    RESET   = "\033[0m"
-}
-{
-    line = $0
-    gsub(/ (GET|POST|OPTIONS|DELETE|PUT) /, CYAN " & " RESET, line)
-    gsub(/-> 200 /, GREEN "-> 200 " RESET, line)
-    gsub(/-> (4[0-9][0-9]|5[0-9][0-9]) /, RED "-> & " RESET, line)
-    gsub(/status: 200/, GREEN "status: 200" RESET, line)
-    gsub(/status: (4[0-9][0-9]|5[0-9][0-9])/, RED "&" RESET, line)
-    gsub(/Upstream: [^|]+/, YELLOW "&" RESET, line)
-    gsub(/latency: [0-9.]+s/, MAGENTA "&" RESET, line)
-    gsub(/ttfb: [0-9.]+s/, MAGENTA "&" RESET, line)
-    gsub(/Size: [^|]+/, BLUE "&" RESET, line)
-    print line
-    fflush()
-}
-'
+case "$MODE" in
+    --errors)
+        echo "[Live Error Log Stream: $ERROR_LOG]"
+        tail -n 20 -F "$ERROR_LOG"
+        ;;
+    --debug)
+        echo "[Live Debug Log Stream: $DEBUG_LOG]"
+        tail -n 20 -F "$DEBUG_LOG"
+        ;;
+    --all)
+        echo "[Live All Layers Stream: access, errors, debug]"
+        tail -n 20 -F "$ACCESS_LOG" "$ERROR_LOG" "$DEBUG_LOG"
+        ;;
+    --trace)
+        REQ_ID="$2"
+        if [ -z "$REQ_ID" ]; then
+            echo "Usage: bash scripts/trace-live.sh --trace <request_id>"
+            exit 1
+        fi
+        echo "[Lifecycle Trace for request_id: $REQ_ID]"
+        grep -h "\[$REQ_ID" "$DEBUG_LOG" "$ERROR_LOG" "$ACCESS_LOG" 2>/dev/null || echo "No logs found for $REQ_ID"
+        ;;
+    --help|-h)
+        echo "Usage: bash scripts/trace-live.sh [OPTION]"
+        echo "Options:"
+        echo "  (no args)          Standard live access trace (Layer 1)"
+        echo "  --errors           Stream error logs only (Layer 2)"
+        echo "  --debug            Stream debug logs only (Layer 3)"
+        echo "  --all              Stream all log layers interleaved"
+        echo "  --trace <id>       Reconstruct full request lifecycle by request ID"
+        ;;
+    *)
+        echo "[Live Access Log Stream: $ACCESS_LOG]"
+        tail -n 20 -F "$ACCESS_LOG"
+        ;;
+esac

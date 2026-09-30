@@ -13,11 +13,13 @@ services:
       - MIMO_API_KEY=${MIMO_API_KEY}
       - USER_A_KEY=${USER_A_KEY:-sk-userA-vkey-001}
       - USER_B_KEY=${USER_B_KEY:-sk-userB-vkey-002}
-      - LOG_PATH=/var/log/nginx/access.log
-      - ERROR_LOG_PATH=/var/log/nginx/error.log
+      - ACCESS_LOG_PATH=/var/log/nginx/access.log
+      - ERROR_LOG_PATH=/var/log/nginx/error_layer.log
+      - DEBUG_LOG_PATH=/var/log/nginx/debug.log
+      - NGINX_SYS_LOG_PATH=/var/log/nginx/error.log
       - NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx
       - NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates
-      - NGINX_ENVSUBST_FILTER_ENV=PORT UPSTREAM_HOST UPSTREAM_PORT UPSTREAM_SCHEME MIMO_API_KEY USER_A_KEY USER_B_KEY LOG_PATH ERROR_LOG_PATH
+      - NGINX_ENVSUBST_FILTER_ENV=PORT UPSTREAM_HOST UPSTREAM_PORT UPSTREAM_SCHEME MIMO_API_KEY USER_A_KEY USER_B_KEY ACCESS_LOG_PATH ERROR_LOG_PATH DEBUG_LOG_PATH NGINX_SYS_LOG_PATH
     volumes:
       - ./config/nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
     extra_hosts:

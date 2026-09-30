@@ -19,6 +19,51 @@ http {
         "Bearer ${USER_B_KEY}" 1;
     }
 
+    map $http_authorization $auth_user {
+        "Bearer ${USER_A_KEY}" "userA";
+        "Bearer ${USER_B_KEY}" "userB";
+        default                "unauthorized";
+    }
+
+    map $request_id $req_id_short {
+        ~^(.{8}) $1;
+        default  $request_id;
+    }
+
+    map $upstream_addr $log_upstream {
+        ""      "local-proxy";
+        default "${UPSTREAM_HOST}";
+    }
+
+    map $status $is_error {
+        ~^[45]  1;
+        default 0;
+    }
+
+    map $status $error_code {
+        401     "PX011";
+        404     "PX001";
+        408     "PX008";
+        413     "PX012";
+        500     "PX010";
+        502     "PX006";
+        503     "PX003";
+        504     "PX005";
+        default "PX010";
+    }
+
+    map $status $error_name {
+        401     "AUTH_UNAUTHORIZED";
+        404     "ROUTE_NOT_FOUND";
+        408     "REQUEST_READ_FAILURE";
+        413     "PAYLOAD_TOO_LARGE";
+        500     "PROXY_INTERNAL_ERROR";
+        502     "UPSTREAM_CONNECTION_RESET";
+        503     "UPSTREAM_CONNECTION_REFUSED";
+        504     "UPSTREAM_RESPONSE_TIMEOUT";
+        default "INTERNAL_ERROR";
+    }
+
     map $content_type $outbound_content_type {
         default $content_type;
         ""      "application/json";
@@ -29,14 +74,14 @@ http {
         ""      "opencode/1.18.21 ai-sdk/openai";
     }
 
-    log_format opencode_readable '[$time_local] id=$request_id | '
-                                 '$request_method $request_uri -> $status | '
-                                 'Client: $remote_addr (cf: $http_cf_connecting_ip, auth: $http_authorization) | '
-                                 'Upstream: $upstream_addr (status: $upstream_status, latency: ${upstream_response_time}s, ttfb: ${upstream_header_time}s) | '
-                                 'Size: ${content_length}B in / ${body_bytes_sent}B out';
+    log_format opencode_access '[$time_local] INFO  [$req_id_short] $request_method $request_uri -> $log_upstream $status ${request_time}s auth=$auth_user req=${content_length}B resp=${body_bytes_sent}B';
+    log_format opencode_error  '[$time_local] ERROR [$req_id_short] error_code=$error_code error=$error_name upstream=$upstream_addr auth=$auth_user client=$remote_addr duration=${request_time}s';
+    log_format opencode_debug  '[$time_local] DEBUG [$req_id_short] route=$uri upstream=$upstream_addr auth=$auth_user client=$remote_addr ttfb=${upstream_header_time}s connect_time=${upstream_connect_time}s';
 
-    access_log ${LOG_PATH} opencode_readable;
-    error_log  ${ERROR_LOG_PATH} warn;
+    access_log ${ACCESS_LOG_PATH} opencode_access;
+    access_log ${ERROR_LOG_PATH}  opencode_error if=$is_error;
+    access_log ${DEBUG_LOG_PATH}  opencode_debug;
+    error_log  ${NGINX_SYS_LOG_PATH} warn;
 
     server {
         listen ${PORT};
