@@ -1,8 +1,8 @@
 # ARM64 OpenCode Reverse Proxy
 
-High-performance reverse proxy for ARM64 Android (Termux) and Linux/Docker, engineered specifically for **OpenCode v2** and OpenAI-compatible inference providers.
+Reverse proxy for ARM64 Android (Termux) and Linux/Docker for **OpenCode v2** and OpenAI-compatible inference providers.
 
-Enables multiple local or remote developer clients (Linux/Debian, Windows, macOS) to multiplex through a single upstream account (e.g. `api.vilao.ai` / `gpt-6-sol`) over local Wi-Fi or Ngrok WAN tunnel.
+Enables multiple developer clients to multiplex through a single upstream account over Ngrok WAN tunnel.
 
 ---
 
@@ -22,7 +22,7 @@ Enables multiple local or remote developer clients (Linux/Debian, Windows, macOS
   │  6. Zero-Buffer Egress: HTTP/1.1 SSE chunked streaming
   ▼
 [Upstream AI Provider]
-  https://api.vilao.ai/v1/responses (gpt-6-sol)
+  https://api/v1/responses (gpt-6-sol)
 ```
 
 ---
