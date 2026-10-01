@@ -51,3 +51,4 @@ echo "    Target: http://127.0.0.1:$PORT"
 echo ""
 
 exec termux-chroot ngrok http "$PORT" --domain="$NGROK_DOMAIN"
+

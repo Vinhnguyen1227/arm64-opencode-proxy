@@ -2,7 +2,7 @@
 
 High-performance reverse proxy for ARM64 Android (Termux) and Linux/Docker, engineered specifically for **OpenCode v2** and OpenAI-compatible inference providers.
 
-Enables multiple local or remote developer clients (Linux/Debian, Windows, macOS) to multiplex through a single upstream account (e.g. `api.vilao.ai` / `gpt-6-sol`) over local Wi-Fi or Cloudflare Tunnel WAN.
+Enables multiple local or remote developer clients (Linux/Debian, Windows, macOS) to multiplex through a single upstream account (e.g. `api.vilao.ai` / `gpt-6-sol`) over local Wi-Fi or Ngrok WAN tunnel.
 
 ---
 
@@ -68,8 +68,8 @@ arm64-opencode-proxy/
 │
 ├── scripts/
 │   ├── deploy-termux.sh      # 1-command installer for Termux ARM64
-│   ├── tunnel-termux.sh      # Cloudflare Tunnel WAN exposure
-│   └── trace-live.sh         # Real-time colored telemetry monitor
+│   ├── tunnel-ngrok.sh       # Permanent Ngrok Tunnel WAN launcher
+│   └── trace-live.sh         # Real-time multi-layer telemetry monitor
 │
 └── tests/
     ├── test-opencode.sh      # POSIX 7-point assertion test suite
@@ -94,7 +94,7 @@ UPSTREAM_SCHEME=https
 MIMO_API_KEY=sk-your-upstream-secret-key
 USER_A_KEY=sk-userA-vkey-001
 USER_B_KEY=sk-userB-vkey-002
-MODEL_NAME=gpt-6-sol
+MODEL_NAME=vgpt/gpt-6-sol
 ```
 
 ---
@@ -114,12 +114,12 @@ MODEL_NAME=gpt-6-sol
 
 ---
 
-### Step 3: (Optional) Public WAN Access via Cloudflare Tunnel
-To connect from outside the local Wi-Fi:
+### Step 3: (Optional) Permanent WAN Access via Ngrok
+To connect from outside the local Wi-Fi using your permanent domain:
 ```bash
-bash scripts/tunnel-termux.sh
+bash scripts/tunnel-ngrok.sh
 ```
-Cloudflare will assign an ephemeral public URL (e.g. `https://xxxx.trycloudflare.com`). Use this URL as `baseURL` in `opencode.json`.
+Requires `NGROK_AUTHTOKEN` and `NGROK_DOMAIN` defined in your `.env`.
 
 ---
 
