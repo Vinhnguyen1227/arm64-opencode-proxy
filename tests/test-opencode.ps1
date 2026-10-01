@@ -1,8 +1,10 @@
 param (
     [string]$TargetUrl = "http://192.168.22.87:8080",
-    [string]$ApiKey = "sk-userA-vkey-001",
+    [string]$ApiKey = $env:USER_A_KEY,
     [string]$Model = "vgpt/gpt-6-sol"
 )
+
+if (-not $ApiKey) { $ApiKey = "sk-userA-vkey-001" }
 
 $ErrorActionPreference = "Continue"
 
