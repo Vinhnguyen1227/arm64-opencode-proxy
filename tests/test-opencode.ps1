@@ -27,10 +27,15 @@ function Assert-Result([string]$Name, [bool]$Condition, [string]$Details = "") {
     }
 }
 
+$baseHeaders = @{
+    "User-Agent" = "opencode/1.18.21"
+    "ngrok-skip-browser-warning" = "true"
+}
+
 # 1. Healthcheck
 Write-Host "[1/7] Testing Healthcheck (GET /healthz)..."
 try {
-    $res = Invoke-RestMethod -Uri "$TargetUrl/healthz" -Method Get -TimeoutSec 10
+    $res = Invoke-RestMethod -Uri "$TargetUrl/healthz" -Headers $baseHeaders -Method Get -TimeoutSec 10
     Assert-Result "Healthcheck returns 200 OK" ($res.status -eq "ok") "Response: $($res | ConvertTo-Json -Compress)"
 } catch {
     Assert-Result "Healthcheck returns 200 OK" $false $_.Exception.Message
@@ -39,7 +44,11 @@ try {
 # 2. Auth Gate Enforcement
 Write-Host "[2/7] Testing Auth Enforcement with invalid key..."
 try {
-    $badHeaders = @{ Authorization = "Bearer invalid-token-xyz" }
+    $badHeaders = @{
+        Authorization = "Bearer invalid-token-xyz"
+        "User-Agent" = "opencode/1.18.21"
+        "ngrok-skip-browser-warning" = "true"
+    }
     $res = Invoke-WebRequest -Uri "$TargetUrl/v1/models" -Headers $badHeaders -Method Get -TimeoutSec 10
     Assert-Result "Rejected invalid key with 401" $false "Expected 401, got $($res.StatusCode)"
 } catch {
@@ -65,7 +74,11 @@ try {
 # 4. Models Discovery (GET /models vs GET /v1/models)
 Write-Host "[4/7] Testing Models Discovery (GET /models with rewrite)..."
 try {
-    $headers = @{ Authorization = "Bearer $ApiKey" }
+    $headers = @{
+        Authorization = "Bearer $ApiKey"
+        "User-Agent" = "opencode/1.18.21"
+        "ngrok-skip-browser-warning" = "true"
+    }
     $res = Invoke-RestMethod -Uri "$TargetUrl/models" -Headers $headers -Method Get -TimeoutSec 15
     Assert-Result "Models returned via root rewrite /models" ($res.data -ne $null -or $res.object -eq "list") "Data items: $($res.data.Count)"
 } catch {
@@ -78,6 +91,8 @@ try {
     $headers = @{
         Authorization = "Bearer $ApiKey"
         "Content-Type" = "application/json"
+        "User-Agent" = "opencode/1.18.21"
+        "ngrok-skip-browser-warning" = "true"
     }
     $body = @{
         model = $Model
@@ -96,6 +111,8 @@ try {
     $headers = @{
         Authorization = "Bearer $ApiKey"
         "Content-Type" = "application/json"
+        "User-Agent" = "opencode/1.18.21"
+        "ngrok-skip-browser-warning" = "true"
     }
     $body = @{
         model = $Model
