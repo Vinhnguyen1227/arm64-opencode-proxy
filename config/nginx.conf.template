@@ -26,8 +26,8 @@ http {
     }
 
     map $request_id $req_id_short {
-        ~^(.{8}) $1;
-        default  $request_id;
+        "~^(.{8})" $1;
+        default    $request_id;
     }
 
     map $upstream_addr $log_upstream {
@@ -36,8 +36,8 @@ http {
     }
 
     map $status $is_error {
-        ~^[45]  1;
-        default 0;
+        "~^[45]" 1;
+        default  0;
     }
 
     map $status $error_code {
