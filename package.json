@@ -1,0 +1,23 @@
+{
+  "name": "arm64-opencode-proxy",
+  "version": "2.1.0",
+  "description": "Credit Calculation & Rate Limiting API Proxy for OpenCode on ARM64 Termux",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js",
+    "test": "node tests/test-quota.js"
+  },
+  "keywords": [
+    "opencode",
+    "reverse-proxy",
+    "rate-limiting",
+    "termux",
+    "arm64"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

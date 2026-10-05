@@ -7,28 +7,23 @@ if [ -f "$REPO_DIR/.env" ]; then
     export $(grep -v '^#' "$REPO_DIR/.env" | xargs)
 fi
 
-LOG_DIR="${PREFIX:-/data/data/com.termux/files/usr}/var/log/nginx"
-ACCESS_LOG="${ACCESS_LOG_PATH:-$LOG_DIR/access.log}"
-ERROR_LOG="${ERROR_LOG_PATH:-$LOG_DIR/error_layer.log}"
-DEBUG_LOG="${DEBUG_LOG_PATH:-$LOG_DIR/debug.log}"
-
-mkdir -p "$LOG_DIR"
-touch "$ACCESS_LOG" "$ERROR_LOG" "$DEBUG_LOG"
+LOG_FILE="${PREFIX:-/data/data/com.termux/files/usr}/var/log/proxy.log"
+touch "$LOG_FILE" 2>/dev/null || true
 
 MODE="${1:-}"
 
 case "$MODE" in
+    --meter)
+        echo "[Live Quota Meter Stream: $LOG_FILE]"
+        tail -n 30 -F "$LOG_FILE" | grep --line-buffered "METER"
+        ;;
     --errors)
-        echo "[Live Error Log Stream: $ERROR_LOG]"
-        tail -n 20 -F "$ERROR_LOG"
+        echo "[Live Error Log Stream: $LOG_FILE]"
+        tail -n 30 -F "$LOG_FILE" | grep --line-buffered "ERROR"
         ;;
     --debug)
-        echo "[Live Debug Log Stream: $DEBUG_LOG]"
-        tail -n 20 -F "$DEBUG_LOG"
-        ;;
-    --all)
-        echo "[Live All Layers Stream: access, errors, debug]"
-        tail -n 20 -F "$ACCESS_LOG" "$ERROR_LOG" "$DEBUG_LOG"
+        echo "[Live Debug Log Stream: $LOG_FILE]"
+        tail -n 30 -F "$LOG_FILE" | grep --line-buffered "DEBUG"
         ;;
     --trace)
         REQ_ID="$2"
@@ -37,19 +32,18 @@ case "$MODE" in
             exit 1
         fi
         echo "[Lifecycle Trace for request_id: $REQ_ID]"
-        grep -h "\[$REQ_ID" "$DEBUG_LOG" "$ERROR_LOG" "$ACCESS_LOG" 2>/dev/null || echo "No logs found for $REQ_ID"
+        grep -h "\[$REQ_ID" "$LOG_FILE" 2>/dev/null || echo "No logs found for $REQ_ID"
         ;;
     --help|-h)
         echo "Usage: bash scripts/trace-live.sh [OPTION]"
         echo "Options:"
-        echo "  (no args)          Standard live access trace (Layer 1)"
-        echo "  --errors           Stream error logs only (Layer 2)"
-        echo "  --debug            Stream debug logs only (Layer 3)"
-        echo "  --all              Stream all log layers interleaved"
-        echo "  --trace <id>       Reconstruct full request lifecycle by request ID"
+        echo "  (no args)          Stream all live gateway logs"
+        echo "  --meter            Stream credit quota deductions only"
+        echo "  --errors           Stream error diagnostics only"
+        echo "  --trace <id>       Filter full request lifecycle by request ID"
         ;;
     *)
-        echo "[Live Access Log Stream: $ACCESS_LOG]"
-        tail -n 20 -F "$ACCESS_LOG"
+        echo "[Live Gateway Log Stream: $LOG_FILE]"
+        tail -n 30 -F "$LOG_FILE"
         ;;
 esac
