@@ -60,6 +60,22 @@ runTest('Credit Calculation: handles model name prefixes (vgpt/...)', () => {
   assert.strictEqual(res.totalCredits, 36000);
 });
 
+// Responses API Schema (/v1/responses): input_tokens, output_tokens, input_tokens_details
+runTest('Credit Calculation: handles OpenAI Responses API schema (input_tokens / output_tokens)', () => {
+  const usage = {
+    input_tokens: 100,
+    output_tokens: 50,
+    input_tokens_details: { cached_tokens: 40 }
+  };
+  const res = calculateCredits('mimo-v2.6-flash', usage);
+  // Hit: 40, Miss: 60, Out: 50
+  // (40 * 2.0) + (60 * 100) + (50 * 200) = 80 + 6000 + 10000 = 16,080
+  assert.strictEqual(res.hitTokens, 40);
+  assert.strictEqual(res.missTokens, 60);
+  assert.strictEqual(res.outputTokens, 50);
+  assert.strictEqual(res.totalCredits, 16080);
+});
+
 // 2. Ledger Atomic Operations
 const testLedgerPath = path.join(__dirname, 'test_ledger.json');
 if (fs.existsSync(testLedgerPath)) fs.unlinkSync(testLedgerPath);

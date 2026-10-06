@@ -45,10 +45,11 @@ function calculateCredits(modelName, usage) {
 
   const cleanName = (modelName || '').replace(/^.*\//, '');
   const rates = MODEL_RATES[cleanName] || MODEL_RATES[modelName] || DEFAULT_RATE;
-  const promptTokens = usage.prompt_tokens || 0;
-  const outputTokens = usage.completion_tokens || 0;
+  const promptTokens = usage.prompt_tokens ?? usage.input_tokens ?? 0;
+  const outputTokens = usage.completion_tokens ?? usage.output_tokens ?? 0;
 
   const hitTokens = usage.prompt_tokens_details?.cached_tokens
+                 ?? usage.input_tokens_details?.cached_tokens
                  ?? usage.prompt_cache_hit_tokens
                  ?? 0;
   const missTokens = Math.max(0, promptTokens - hitTokens);
@@ -130,9 +131,10 @@ function createStreamUsageMeter(apiKey, fallbackModel, ledgerInstance, reqIdShor
 
         try {
           const payload = JSON.parse(trimmed.replace(/^data:\s*/, ''));
-          if (payload.usage) {
-            const activeModel = payload.model || fallbackModel;
-            const res = calculateCredits(activeModel, payload.usage);
+          const usageObj = payload.usage || payload.response?.usage;
+          if (usageObj) {
+            const activeModel = payload.model || payload.response?.model || fallbackModel;
+            const res = calculateCredits(activeModel, usageObj);
             const updatedUsage = ledgerInstance.addUsage(apiKey, res.totalCredits);
 
             if (typeof onMeter === 'function') {
@@ -299,9 +301,10 @@ app.all(['/responses', '/models', '/chat/completions', '/embeddings', '/v1/*'], 
         let creditTag = 'credits=0';
         try {
           const json = JSON.parse(bodyBuf.toString('utf8'));
-          if (json.usage) {
-            const activeModel = json.model || requestedModel;
-            const creditsRes = calculateCredits(activeModel, json.usage);
+          const usageObj = json.usage || json.response?.usage;
+          if (usageObj) {
+            const activeModel = json.model || json.response?.model || requestedModel;
+            const creditsRes = calculateCredits(activeModel, usageObj);
             const updatedUsage = ledger.addUsage(apiKey, creditsRes.totalCredits);
             creditTag = `credits=${creditsRes.totalCredits.toLocaleString()} (hit:${creditsRes.hitTokens} miss:${creditsRes.missTokens} out:${creditsRes.outputTokens}) month_total=${updatedUsage.toLocaleString()}`;
             console.log(
