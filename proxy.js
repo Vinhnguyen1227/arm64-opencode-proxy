@@ -113,7 +113,7 @@ class CreditLedger {
 
 const ledger = new CreditLedger();
 
-function createStreamUsageMeter(apiKey, fallbackModel, ledgerInstance, reqIdShort) {
+function createStreamUsageMeter(apiKey, fallbackModel, ledgerInstance, reqIdShort, onMeter) {
   let sseBuffer = '';
 
   return new Transform({
@@ -134,6 +134,10 @@ function createStreamUsageMeter(apiKey, fallbackModel, ledgerInstance, reqIdShor
             const activeModel = payload.model || fallbackModel;
             const res = calculateCredits(activeModel, payload.usage);
             const updatedUsage = ledgerInstance.addUsage(apiKey, res.totalCredits);
+
+            if (typeof onMeter === 'function') {
+              onMeter(res, updatedUsage);
+            }
 
             console.log(
               `[${new Date().toISOString()}] METER [${reqIdShort}] Key: ${apiKey.slice(0, 10)}... | Model: ${res.model} | ` +
@@ -268,13 +272,19 @@ app.all(['/responses', '/models', '/chat/completions', '/embeddings', '/v1/*'], 
     }
 
     let responseBytes = 0;
+    let streamMeterData = null;
 
     if (isStream) {
-      const meterStream = createStreamUsageMeter(apiKey, requestedModel, ledger, reqIdShort);
+      const meterStream = createStreamUsageMeter(apiKey, requestedModel, ledger, reqIdShort, (resObj, monthTotal) => {
+        streamMeterData = { res: resObj, monthTotal };
+      });
       meterStream.on('data', (chunk) => { responseBytes += chunk.length; });
       meterStream.on('end', () => {
         const duration = Date.now() - startTime;
-        console.log(`[${new Date().toISOString()}] INFO  [${reqIdShort}] ${req.method} ${targetPath} -> ${UPSTREAM_HOST} ${upstreamRes.statusCode} ${duration}ms auth=${authTenant} req=${outboundBody ? outboundBody.length : 0}B resp=${responseBytes}B`);
+        const creditTag = streamMeterData
+          ? `credits=${streamMeterData.res.totalCredits.toLocaleString()} (hit:${streamMeterData.res.hitTokens} miss:${streamMeterData.res.missTokens} out:${streamMeterData.res.outputTokens}) month_total=${streamMeterData.monthTotal.toLocaleString()}`
+          : `credits=0`;
+        console.log(`[${new Date().toISOString()}] INFO  [${reqIdShort}] ${req.method} ${targetPath} -> ${UPSTREAM_HOST} ${upstreamRes.statusCode} ${duration}ms auth=${authTenant} ${creditTag} req=${outboundBody ? outboundBody.length : 0}B resp=${responseBytes}B`);
       });
       upstreamRes.pipe(meterStream).pipe(res);
     } else {
@@ -286,12 +296,14 @@ app.all(['/responses', '/models', '/chat/completions', '/embeddings', '/v1/*'], 
       });
       upstreamRes.on('end', () => {
         const bodyBuf = Buffer.concat(chunks);
+        let creditTag = 'credits=0';
         try {
           const json = JSON.parse(bodyBuf.toString('utf8'));
           if (json.usage) {
             const activeModel = json.model || requestedModel;
             const creditsRes = calculateCredits(activeModel, json.usage);
             const updatedUsage = ledger.addUsage(apiKey, creditsRes.totalCredits);
+            creditTag = `credits=${creditsRes.totalCredits.toLocaleString()} (hit:${creditsRes.hitTokens} miss:${creditsRes.missTokens} out:${creditsRes.outputTokens}) month_total=${updatedUsage.toLocaleString()}`;
             console.log(
               `[${new Date().toISOString()}] METER [${reqIdShort}] Key: ${apiKey.slice(0, 10)}... | Model: ${creditsRes.model} | ` +
               `Hit: ${creditsRes.hitTokens} | Miss: ${creditsRes.missTokens} | Out: ${creditsRes.outputTokens} | ` +
@@ -304,7 +316,7 @@ app.all(['/responses', '/models', '/chat/completions', '/embeddings', '/v1/*'], 
         }
         res.end(bodyBuf);
         const duration = Date.now() - startTime;
-        console.log(`[${new Date().toISOString()}] INFO  [${reqIdShort}] ${req.method} ${targetPath} -> ${UPSTREAM_HOST} ${upstreamRes.statusCode} ${duration}ms auth=${authTenant} req=${outboundBody ? outboundBody.length : 0}B resp=${responseBytes}B`);
+        console.log(`[${new Date().toISOString()}] INFO  [${reqIdShort}] ${req.method} ${targetPath} -> ${UPSTREAM_HOST} ${upstreamRes.statusCode} ${duration}ms auth=${authTenant} ${creditTag} req=${outboundBody ? outboundBody.length : 0}B resp=${responseBytes}B`);
       });
     }
   });
