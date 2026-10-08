@@ -1,11 +1,11 @@
 /**
- * OpenCode Anti-Loop Reasoning Plugin
+ * OpenCode V2 Anti-Loop Reasoning Plugin
  *
  * Runs exclusively inside the end-user's OpenCode client environment.
  * Monitors streaming thinking traces (part.type === "reasoning" | "thinking").
  * Uses an arbitrary free model from OpenCode's free model pool to judge loops.
  * Automatically loops back to rotate across free models if rate-limited (HTTP 429).
- * Aborts the runaway session via ctx.client.session.abort() to save user credits.
+ * Aborts the runaway session via session.abort() to save user credits.
  */
 
 // Candidate pool of OpenCode built-in free models
@@ -126,7 +126,6 @@ async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = nu
       }
     } catch (err) {
       // 429 Rate Limit / Outage: Loop back to pick another free model from pool
-      // Logging skipped to avoid polluting client TUI
       continue;
     }
   }
@@ -141,16 +140,15 @@ async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = nu
 }
 
 /**
- * Plugin Factory for OpenCode
+ * OpenCode V2 Plugin Definition
  */
-const AntiLoopPlugin = async (ctx) => {
-  // Session tracking map: sessionID -> { lastCheckedLength, isChecking }
-  const sessionStates = new Map();
+const pluginDefinition = {
+  id: 'anti-loop',
+  async setup(ctx) {
+    const sessionStates = new Map();
 
-  return {
-    event: async ({ event }) => {
-      if (!event || event.type !== 'message.part.updated') return;
-
+    const handlePartUpdate = async (event) => {
+      if (!event) return;
       const part = event.properties?.part || event.part;
       if (!part) return;
 
@@ -191,13 +189,17 @@ const AntiLoopPlugin = async (ctx) => {
 
           if (ctx?.client?.app?.log) {
             await ctx.client.app.log(logMsg);
+          } else if (ctx?.app?.log) {
+            await ctx.app.log(logMsg);
           } else {
             console.warn(logMsg);
           }
 
-          // Terminate the active session to halt credit drain
+          // Terminate active session
           if (ctx?.client?.session?.abort) {
             await ctx.client.session.abort({ sessionID });
+          } else if (ctx?.session?.abort) {
+            await ctx.session.abort({ sessionID });
           }
         }
       } catch (err) {
@@ -205,14 +207,33 @@ const AntiLoopPlugin = async (ctx) => {
       } finally {
         state.isChecking = false;
       }
+    };
+
+    // OpenCode V2 event subscription pattern
+    if (ctx?.event?.subscribe) {
+      ctx.event.subscribe('message.part.updated', async (event) => {
+        await handlePartUpdate(event);
+      });
     }
-  };
+
+    // OpenCode V1/hook return pattern for backwards & hybrid compatibility
+    return {
+      event: async ({ event }) => {
+        if (event?.type === 'message.part.updated') {
+          await handlePartUpdate(event);
+        }
+      }
+    };
+  }
 };
 
-// Export plugin and utility functions for testing
-module.exports = AntiLoopPlugin;
-module.exports.default = AntiLoopPlugin;
-module.exports.AntiLoopPlugin = AntiLoopPlugin;
-module.exports.FREE_MODELS_POOL = FREE_MODELS_POOL;
-module.exports.detectLocalRepetition = detectLocalRepetition;
-module.exports.inspectWithRandomFreeModel = inspectWithRandomFreeModel;
+// Export plugin and utility functions
+pluginDefinition.default = pluginDefinition;
+pluginDefinition.AntiLoopPlugin = pluginDefinition.setup;
+pluginDefinition.FREE_MODELS_POOL = FREE_MODELS_POOL;
+pluginDefinition.detectLocalRepetition = detectLocalRepetition;
+pluginDefinition.inspectWithRandomFreeModel = inspectWithRandomFreeModel;
+
+module.exports = pluginDefinition;
+module.exports.default = pluginDefinition;
+

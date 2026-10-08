@@ -154,6 +154,31 @@ async function main() {
     assert.strictEqual(abortedSession, null, 'Short reasoning should not trigger check or abort');
   });
 
+  // Test 6: OpenCode V2 Plugin Definition Contract & ctx.event.subscribe
+  await runTest('OpenCode V2 Contract: exports { id, setup } and subscribes via ctx.event.subscribe', async () => {
+    const rawModule = require('../.opencode/plugins/anti-loop');
+    assert.strictEqual(typeof rawModule, 'object');
+    assert.strictEqual(rawModule.id, 'anti-loop');
+    assert.strictEqual(typeof rawModule.setup, 'function');
+
+    let subscribedEvent = null;
+    let subscriptionHandler = null;
+
+    const mockV2Ctx = {
+      event: {
+        subscribe: (eventName, handler) => {
+          subscribedEvent = eventName;
+          subscriptionHandler = handler;
+        }
+      }
+    };
+
+    await rawModule.setup(mockV2Ctx);
+
+    assert.strictEqual(subscribedEvent, 'message.part.updated');
+    assert.strictEqual(typeof subscriptionHandler, 'function');
+  });
+
   console.log(`\nTest Summary: ${passed} Passed, ${failed} Failed`);
   if (failed > 0) process.exit(1);
 }
