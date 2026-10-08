@@ -1,14 +1,4 @@
-/**
- * OpenCode V2 Anti-Loop Reasoning Plugin
- *
- * Runs exclusively inside the end-user's OpenCode client environment.
- * Monitors streaming thinking traces (part.type === "reasoning" | "thinking").
- * Uses an arbitrary free model from OpenCode's free model pool to judge loops.
- * Automatically loops back to rotate across free models if rate-limited (HTTP 429).
- * Aborts the runaway session via session.abort() to save user credits.
- */
-
-// Candidate pool of OpenCode built-in free models
+// free models pool
 const FREE_MODELS_POOL = [
   'opencode/mimo-v2.6-flash-free',
   'opencode/nemotron-3.5-lightning-free',
@@ -23,16 +13,15 @@ const FREE_MODELS_POOL = [
   'opencode/muse-spark-1.3-contributor-free'
 ];
 
-// Configuration thresholds
+// Config thresholds
 const MIN_REASONING_CHARS = 3500;  // Skip short normal thinking traces
 const CHECK_INTERVAL_CHARS = 2000; // Character delta before next check
 const CONFIDENCE_THRESHOLD = 0.8;  // Minimum confidence score to abort
 const REPETITION_HEURISTIC_SCORE = 0.6; // Local repetition score to force early check
 
-/**
- * Fast local n-gram repetition detector.
- * Returns a score between 0.0 and 1.0 based on phrase repetition.
- */
+
+// n-gram repetition detector.
+
 function detectLocalRepetition(text) {
   if (!text || text.length < 1500) return 0.0;
 
@@ -53,11 +42,7 @@ function detectLocalRepetition(text) {
   if (maxRepeats >= 2) return 0.5;
   return 0.1;
 }
-
-/**
- * Loops back across free models to find an available judge model.
- * Bypasses individual free model rate limits (429) or temporary outages.
- */
+// Loops free models.
 async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = null) {
   const candidates = [...FREE_MODELS_POOL];
   const maxRetries = Math.min(5, candidates.length);
@@ -75,7 +60,6 @@ async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = nu
   ].join('\n');
 
   for (let attempt = 1; attempt <= maxRetries && candidates.length > 0; attempt++) {
-    // Arbitrarily pick random free model from remaining candidates
     const randIdx = Math.floor(Math.random() * candidates.length);
     const chosenModel = candidates.splice(randIdx, 1)[0];
 
@@ -83,10 +67,8 @@ async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = nu
       let rawText = '';
 
       if (typeof queryFn === 'function') {
-        // Allows dependency injection for tests
         rawText = await queryFn(chosenModel, prompt);
       } else if (client?.session?.create && client?.session?.prompt) {
-        // OpenCode SDK client interface
         const tempSession = await client.session.create({
           title: 'anti-loop-judge',
           model: chosenModel
@@ -100,7 +82,6 @@ async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = nu
 
         rawText = res?.text || res?.content || (typeof res === 'string' ? res : '');
 
-        // Cleanup temporary judge session
         try {
           if (client.session.delete) {
             await client.session.delete({ sessionID: tempSession.id });
@@ -108,7 +89,6 @@ async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = nu
         } catch (_) {}
       }
 
-      // Parse JSON from model output
       if (rawText) {
         const jsonMatch = rawText.match(/\{[\s\S]*?\}/);
         if (jsonMatch) {
@@ -125,7 +105,6 @@ async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = nu
         }
       }
     } catch (err) {
-      // 429 Rate Limit / Outage: Loop back to pick another free model from pool
       continue;
     }
   }
@@ -139,9 +118,8 @@ async function inspectWithRandomFreeModel(client, reasoningExcerpt, queryFn = nu
   };
 }
 
-/**
- * OpenCode V2 Plugin Definition
- */
+//OpenCode V2 Plugin Definition
+
 const pluginDefinition = {
   id: 'anti-loop',
   async setup(ctx) {
@@ -227,7 +205,6 @@ const pluginDefinition = {
   }
 };
 
-// Export plugin and utility functions
 pluginDefinition.default = pluginDefinition;
 pluginDefinition.AntiLoopPlugin = pluginDefinition.setup;
 pluginDefinition.FREE_MODELS_POOL = FREE_MODELS_POOL;
